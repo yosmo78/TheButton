@@ -1,19 +1,18 @@
 STRINGIFY(
-#version 330 core
+#version 330 core\n
 
-in vec3 aPos;
-in vec3 aNormal;
-in vec2 aTextCoord;
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
 
-mat4 mModel;
-mat3 mNormal;
-mat4 mViewProj;
+uniform mat4 mModel;
+uniform mat3 mNormal;
+uniform mat4 mViewProj;
 
 varying vec3 vNormal;
 
 void main()
 {
-   gl_Position =  mViewProj * mModel * vec4(aPos,1.0);
-   vNormal =  mViewProj * mNormal * vec4(aNormal,0.0);
+   gl_Position =  (mViewProj *mModel) * vec4(aPos,1.0) ;
+   vNormal =  mNormal*aNormal;
 }
 )

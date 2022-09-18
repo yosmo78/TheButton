@@ -6,6 +6,10 @@
 #include <iomanip>
 #include <math.h>
 #include <unordered_map>
+#include <filesystem>
+#include <iterator>
+#include <algorithm>
+ 
 
 struct Point4
 {
@@ -95,15 +99,38 @@ namespace std {
     };
 };
 
+ 
+ 
+void read_directory(const std::string& name, std::vector<std::string>& v, std::vector<std::string>& v2, std::vector<std::string>& v3)
+{
+    std::filesystem::path p(name);
+    std::filesystem::directory_iterator end;
+    for (std::filesystem::directory_iterator it(p); it != end; ++it)
+    {
+        if(it->path().extension().string() == ".obj")
+        {
+            v.push_back(it->path().string());
+            v2.push_back(it->path().stem().string());
+            v3.push_back(it->path().parent_path().string());
+        }
+    }
+}
+
 int main()
 {
-    std::string objFileName = "whatever.obj";
-    std::string vertexArrayName = "jacobButtonTopVerts";
-    std::string indexArrayName = "jacobButtonTopIndices";
-
-    for( uint32_t file = 0; file < NumFiles; ++file)
+    std::ofstream fout;
+    fout.open("Models.h");
+    
+    std::vector<std::string> fileNames;
+    std::vector<std::string> fileNamesNoExt;
+    std::vector<std::string> fileNamesPath;
+    read_directory("./JacobButton/", fileNames,fileNamesNoExt,fileNamesPath);
+    read_directory("./ChristopherButton/", fileNames,fileNamesNoExt,fileNamesPath);
+    for( uint32_t file = 0; file < fileNames.size(); ++file)
     {
-        std::ifstream fin(objFileName);
+        std::string vertexArrayName = fileNamesNoExt[file]+"Verts";
+        std::string indexArrayName = fileNamesNoExt[file]+"Indices";
+        std::ifstream fin(fileNames[file]);
 
         std::vector<Point3> verts;
         std::vector<Point3> normals;
@@ -126,7 +153,7 @@ int main()
             {
                 std::string fileName;
                 ss >> fileName;
-                std::ifstream matFin(fileName);
+                std::ifstream matFin(fileNamesPath[file]+fileName);
                 std::string matLine;
                 while(std::getline(matFin,matLine))
                 {
@@ -321,14 +348,14 @@ int main()
 
         //printMaterials(materials);
 
-        std::cout << "\tfloat "<<vertexArrayName<<"[] ="<<std::endl<< "\t{"<<std::endl;
+        fout << "float "<<vertexArrayName<<"[] ="<<std::endl<< "{"<<std::endl;
         for( int i = 0; i < mesh.size(); ++i)
         {
-            std::cout << "\t\t"<< std::fixed << std::setprecision(6) << (mesh[i].pos.x < 0?"":" ")<<mesh[i].pos.x <<"f, " << (mesh[i].pos.y < 0?"":" ")<<mesh[i].pos.y <<"f, " << (mesh[i].pos.z < 0?"":" ")<<mesh[i].pos.z <<"f, ";
-            std::cout << (mesh[i].normal.x < 0?"":" ") <<mesh[i].normal.x <<"f, " << (mesh[i].normal.y < 0?"":" ") <<mesh[i].normal.y <<"f, " << (mesh[i].normal.z < 0?"":" ") <<mesh[i].normal.z <<"f, ";
-            std::cout << std::endl;
+            fout << "\t"<< std::fixed << std::setprecision(6) << (mesh[i].pos.x < 0?"":" ")<<mesh[i].pos.x <<"f, " << (mesh[i].pos.y < 0?"":" ")<<mesh[i].pos.y <<"f, " << (mesh[i].pos.z < 0?"":" ")<<mesh[i].pos.z <<"f, ";
+            fout << (mesh[i].normal.x < 0?"":" ") <<mesh[i].normal.x <<"f, " << (mesh[i].normal.y < 0?"":" ") <<mesh[i].normal.y <<"f, " << (mesh[i].normal.z < 0?"":" ") <<mesh[i].normal.z <<"f, ";
+            fout << std::endl;
         }
-        std::cout << "\t};"<<std::endl;
+        fout << "};"<<std::endl;
 
         int maxIndex = -1;
         for( int i = 0; i < meshIndices.size(); ++i)
@@ -341,18 +368,19 @@ int main()
         double maxAmtOfIndexDigits = ceil(log10(maxIndex));
         if( meshIndices.size() > 2 )
         {
-            std::cout << "\tuint32_t "<<indexArrayName<<"[] ="<<std::endl<< "\t{"<<std::endl;
+            fout << "uint32_t "<<indexArrayName<<"[] ="<<std::endl<< "{"<<std::endl;
             for( int i = 0; i < meshIndices.size(); i += 3)
             {
-                std::cout << "\t\t" << std::setw(maxAmtOfIndexDigits) << meshIndices[i] << ", "<< std::setw(maxAmtOfIndexDigits) <<meshIndices[i+2] << ", "<< std::setw(maxAmtOfIndexDigits) <<meshIndices[i+1]  <<(((i+2) <meshIndices.size()-1)?",":"") << std::endl;
+                fout << "\t" << std::setw(maxAmtOfIndexDigits) << meshIndices[i] << ", "<< std::setw(maxAmtOfIndexDigits) <<meshIndices[i+2] << ", "<< std::setw(maxAmtOfIndexDigits) <<meshIndices[i+1]  <<(((i+2) <meshIndices.size()-1)?",":"") << std::endl;
             }
-            std::cout << "\t};"<<std::endl;
-            std::cout << "\tuint32_t "<<indexArrayName<<"Count = "<< meshIndices.size()<<";";
+            fout << "};"<<std::endl;
+            fout << "uint32_t "<<indexArrayName<<"Count = "<< meshIndices.size()<<";" <<std::endl;
         }
         else
         {
-            std::cout << "\tuint32_t "<<indexArrayName<<"Count = "<< 0<<";";
+            fout << "uint32_t "<<indexArrayName<<"Count = "<< 0<<";"<<std::endl;
         }
     }
+    fout.close();
     return 0;
 }

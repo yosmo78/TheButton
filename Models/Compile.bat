@@ -7,4 +7,4 @@ set FILES=ModelBaker.cpp
 
 set LIBS=kernel32.lib user32.lib gdi32.lib
 
-cl /MTd /nologo /W3 /Z7 /GS- /Gs999999 /arch:AVX2 /std:c++latest %FILES% -FeModelBaker.exe %LIBS% /link /incremental:no /opt:icf /opt:ref /subsystem:console
+cl /EHsc /MTd /nologo /W3 /Z7 /GS- /Gs999999 /arch:AVX2 /std:c++latest %FILES% -FeModelBaker.exe %LIBS% /link /incremental:no /opt:icf /opt:ref /subsystem:console

@@ -10,20 +10,19 @@
 #include <math.h>
 #include <time.h>
 
+#if MAIN_DEBUG
+#include <assert.h>
+#endif
+
+#include "Models.h"
+
 #define DEFAULT_SCREEN_WIDTH 680
 #define DEFAULT_SCREEN_HEIGHT 420
 
+#define PI_F 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679f
+#define PI_D 3.1415926535897932384626433832795028841971693993751058209749445923078164062862089986280348253421170679
+
 #define STRINGIFY(x) #x
-
-uint32_t screen_width = DEFAULT_SCREEN_WIDTH;
-uint32_t screen_height = DEFAULT_SCREEN_HEIGHT;
-
-//state
-uint8_t Running;
-
-//Window handles
-HDC hDC;
-HWND WindowHandle;
 
 #define GL_COMPILE_STATUS   	0x8B81
 #define GL_LINK_STATUS      	0x8B82
@@ -63,12 +62,602 @@ void   (__stdcall *glVertexAttribPointer)(GLuint index, GLint size, GLenum type,
 void   (__stdcall *glEnableVertexAttribArray)(GLuint index) = NULL;
 GLint  (__stdcall *glGetUniformLocation)(GLuint program, const GLchar *name) = NULL;
 void   (__stdcall *glUniformMatrix4fv)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) = NULL;
+void   (__stdcall *glUniformMatrix3fv)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) = NULL;
 void   (__stdcall *glUniform3fv)( GLint location, GLsizei count, const GLfloat *value) = NULL;
 void   (__stdcall *glUniform4fv)( GLint location, GLsizei count, const GLfloat *value) = NULL;
+
+typedef struct Mat3f
+{
+	union
+	{
+		float m[3][3];
+	};
+} Mat3f;
+
+typedef struct Mat4f
+{
+	union
+	{
+		float m[4][4];
+	};
+} Mat4f;
+
+typedef struct Vec2f
+{
+	union
+	{
+		float v[2];
+		struct
+		{
+			float x;
+			float y;
+		};
+	};
+} Vec2f;
+
+typedef struct Vec3f
+{
+	union
+	{
+		float v[3];
+		struct
+		{
+			float x;
+			float y;
+			float z;
+		};
+	};
+} Vec3f;
+
+typedef struct Vec4f
+{
+	union
+	{
+		float v[4];
+		struct
+		{
+			float x;
+			float y;
+			float z;
+			float w;
+		};
+	};
+} Vec4f;
+
+typedef struct Quatf
+{
+	union
+	{
+		float q[4];
+		struct
+		{
+			float w; //real
+			float x;
+			float y;
+			float z;
+		};
+		struct
+		{
+			float real; //real;
+			Vec3f v;
+		};
+	};
+} Quatf;
+
+typedef struct Vertex
+{
+    Vec3f vPos;
+    Vec3f vNormal;
+} Vertex;
+
+
+uint32_t screen_width = DEFAULT_SCREEN_WIDTH;
+uint32_t screen_height = DEFAULT_SCREEN_HEIGHT;
+
+//state
+uint8_t Running;
+uint8_t isPaused;
+uint8_t isFullscreen;
+
+//camera
+Vec3f position;
+float rotHor;
+float rotVert;
+const float hFov = 60.0f;
+const float vFov = 60.0f;
+
+//movement
+float speed = 10.0f; //movement speed
+float mouseSensitivity = 5.f;
+
+//Window handles
+HDC hDC;
+HWND WindowHandle;
+RECT winRect;
+RECT nonFullScreenRect;
+RECT snapPosRect;
+uint32_t midX;
+uint32_t midY;
+
+inline
+void InitMat3f( Mat3f *a_pMat )
+{
+	a_pMat->m[0][0] = 1; a_pMat->m[0][1] = 0; a_pMat->m[0][2] = 0;
+	a_pMat->m[1][0] = 0; a_pMat->m[1][1] = 1; a_pMat->m[1][2] = 0;
+	a_pMat->m[2][0] = 0; a_pMat->m[2][1] = 0; a_pMat->m[2][2] = 1;
+}
+
+//for 2D translations
+inline
+void InitTransMat3f( Mat3f *a_pMat, float x, float y )
+{
+	a_pMat->m[0][0] = 1; a_pMat->m[0][1] = 0; a_pMat->m[0][2] = 0;
+	a_pMat->m[1][0] = 0; a_pMat->m[1][1] = 1; a_pMat->m[1][2] = 0;
+	a_pMat->m[2][0] = x; a_pMat->m[2][1] = y; a_pMat->m[2][2] = 1;
+}
+
+//for 2D translations
+inline
+void InitTransMat3f( Mat3f *a_pMat, Vec2f *a_pTrans )
+{
+	a_pMat->m[0][0] = 1;           a_pMat->m[0][1] = 0;           a_pMat->m[0][2] = 0;
+	a_pMat->m[1][0] = 0;           a_pMat->m[1][1] = 1;           a_pMat->m[1][2] = 0;
+	a_pMat->m[2][0] = a_pTrans->x; a_pMat->m[2][1] = a_pTrans->y; a_pMat->m[2][2] = 1;
+}
+
+inline
+void InitRotXMat3f( Mat3f *a_pMat, float angle )
+{
+	a_pMat->m[0][0] = 1; a_pMat->m[0][1] = 0;                        a_pMat->m[0][2] = 0;                   
+	a_pMat->m[1][0] = 0; a_pMat->m[1][1] = cosf(angle*PI_F/180.0f);  a_pMat->m[1][2] = sinf(angle*PI_F/180.0f); 
+	a_pMat->m[2][0] = 0; a_pMat->m[2][1] = -sinf(angle*PI_F/180.0f); a_pMat->m[2][2] = cosf(angle*PI_F/180.0f);
+}
+
+inline
+void InitRotYMat3f( Mat3f *a_pMat, float angle )
+{
+	a_pMat->m[0][0] = cosf(angle*PI_F/180.0f);  a_pMat->m[0][1] = 0; a_pMat->m[0][2] = -sinf(angle*PI_F/180.0f);
+	a_pMat->m[1][0] = 0;                        a_pMat->m[1][1] = 1; a_pMat->m[1][2] = 0;                    
+	a_pMat->m[2][0] = sinf(angle*PI_F/180.0f);  a_pMat->m[2][1] = 0; a_pMat->m[2][2] = cosf(angle*PI_F/180.0f); 
+}
+
+inline
+void InitRotZMat3f( Mat3f *a_pMat, float angle )
+{
+	a_pMat->m[0][0] = cosf(angle*PI_F/180.0f);  a_pMat->m[0][1] = sinf(angle*PI_F/180.0f); a_pMat->m[0][2] = 0;
+	a_pMat->m[1][0] = -sinf(angle*PI_F/180.0f); a_pMat->m[1][1] = cosf(angle*PI_F/180.0f); a_pMat->m[1][2] = 0;
+	a_pMat->m[2][0] = 0;                        a_pMat->m[2][1] = 0; 					   a_pMat->m[2][2] = 1;
+}
+
+inline
+void InitRotArbAxisMat3f( Mat3f *a_pMat, Vec3f *a_pAxis, float angle )
+{
+	float c = cosf(angle*PI_F/180.0f);
+	float mC = 1.0f-c;
+	float s = sinf(angle*PI_F/180.0f);
+	a_pMat->m[0][0] = c                          + (a_pAxis->x*a_pAxis->x*mC); a_pMat->m[0][1] = (a_pAxis->y*a_pAxis->x*mC) + (a_pAxis->z*s);             a_pMat->m[0][2] = (a_pAxis->z*a_pAxis->x*mC) - (a_pAxis->y*s);            
+	a_pMat->m[1][0] = (a_pAxis->x*a_pAxis->y*mC) - (a_pAxis->z*s);             a_pMat->m[1][1] = c                          + (a_pAxis->y*a_pAxis->y*mC); a_pMat->m[1][2] = (a_pAxis->z*a_pAxis->y*mC) + (a_pAxis->x*s);            
+	a_pMat->m[2][0] = (a_pAxis->x*a_pAxis->z*mC) + (a_pAxis->y*s);             a_pMat->m[2][1] = (a_pAxis->y*a_pAxis->z*mC) - (a_pAxis->x*s);             a_pMat->m[2][2] = c                          + (a_pAxis->z*a_pAxis->z*mC);
+}
+
+inline
+void InitOrientationMat3f( Mat3f *a_pMat, Vec3f *a_pRight, Vec3f *a_pUp, Vec3f*a_pForward )
+{
+	a_pMat->m[0][0] = a_pRight->x;   a_pMat->m[0][1] = a_pRight->y;   a_pMat->m[0][2] = a_pRight->z;  
+	a_pMat->m[1][0] = a_pUp->x;      a_pMat->m[1][1] = a_pUp->y;      a_pMat->m[1][2] = a_pUp->z;     
+	a_pMat->m[2][0] = a_pForward->x; a_pMat->m[2][1] = a_pForward->y; a_pMat->m[2][2] = a_pForward->z;
+}
+
+
+//need to verify ordering, may need to be flipped
+inline
+void Mat3fMult( Mat3f *a, Mat3f *b, Mat3f *out)
+{
+	out->m[0][0] = a->m[0][0]*b->m[0][0] + a->m[0][1]*b->m[1][0] + a->m[0][2]*b->m[2][0];
+	out->m[0][1] = a->m[0][0]*b->m[0][1] + a->m[0][1]*b->m[1][1] + a->m[0][2]*b->m[2][1];
+	out->m[0][2] = a->m[0][0]*b->m[0][2] + a->m[0][1]*b->m[1][2] + a->m[0][2]*b->m[2][2];
+
+	out->m[1][0] = a->m[1][0]*b->m[0][0] + a->m[1][1]*b->m[1][0] + a->m[1][2]*b->m[2][0];
+	out->m[1][1] = a->m[1][0]*b->m[0][1] + a->m[1][1]*b->m[1][1] + a->m[1][2]*b->m[2][1];
+	out->m[1][2] = a->m[1][0]*b->m[0][2] + a->m[1][1]*b->m[1][2] + a->m[1][2]*b->m[2][2];
+
+	out->m[2][0] = a->m[2][0]*b->m[0][0] + a->m[2][1]*b->m[1][0] + a->m[2][2]*b->m[2][0];
+	out->m[2][1] = a->m[2][0]*b->m[0][1] + a->m[2][1]*b->m[1][1] + a->m[2][2]*b->m[2][1];
+	out->m[2][2] = a->m[2][0]*b->m[0][2] + a->m[2][1]*b->m[1][2] + a->m[2][2]*b->m[2][2];
+}
+
+inline
+void Mat3fVecMult( Mat3f *a_pMat, Vec3f *a_pIn, Vec3f *a_pOut)
+{
+	a_pOut->x = a_pMat->m[0][0]*a_pIn->x + a_pMat->m[1][0]*a_pIn->y + a_pMat->m[2][0]*a_pIn->z;
+	a_pOut->y = a_pMat->m[0][1]*a_pIn->x + a_pMat->m[1][1]*a_pIn->y + a_pMat->m[2][1]*a_pIn->z;
+	a_pOut->z = a_pMat->m[0][2]*a_pIn->x + a_pMat->m[1][2]*a_pIn->y + a_pMat->m[2][2]*a_pIn->z;
+}
+
+inline
+void InitMat4f( Mat4f *a_pMat )
+{
+	a_pMat->m[0][0] = 1; a_pMat->m[0][1] = 0; a_pMat->m[0][2] = 0; a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0; a_pMat->m[1][1] = 1; a_pMat->m[1][2] = 0; a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0; a_pMat->m[2][1] = 0; a_pMat->m[2][2] = 1; a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = 0; a_pMat->m[3][1] = 0; a_pMat->m[3][2] = 0; a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitTransMat4f( Mat4f *a_pMat, float x, float y, float z )
+{
+	a_pMat->m[0][0] = 1; a_pMat->m[0][1] = 0; a_pMat->m[0][2] = 0; a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0; a_pMat->m[1][1] = 1; a_pMat->m[1][2] = 0; a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0; a_pMat->m[2][1] = 0; a_pMat->m[2][2] = 1; a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = x; a_pMat->m[3][1] = y; a_pMat->m[3][2] = z; a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitTransMat4f( Mat4f *a_pMat, Vec3f *a_pTrans )
+{
+	a_pMat->m[0][0] = 1;           a_pMat->m[0][1] = 0;           a_pMat->m[0][2] = 0;           a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0;           a_pMat->m[1][1] = 1;           a_pMat->m[1][2] = 0;           a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0;           a_pMat->m[2][1] = 0;           a_pMat->m[2][2] = 1;           a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = a_pTrans->x; a_pMat->m[3][1] = a_pTrans->y; a_pMat->m[3][2] = a_pTrans->z; a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitRotXMat4f( Mat4f *a_pMat, float angle )
+{
+	a_pMat->m[0][0] = 1; a_pMat->m[0][1] = 0;                        a_pMat->m[0][2] = 0;                       a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0; a_pMat->m[1][1] = cosf(angle*PI_F/180.0f);  a_pMat->m[1][2] = sinf(angle*PI_F/180.0f); a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0; a_pMat->m[2][1] = -sinf(angle*PI_F/180.0f); a_pMat->m[2][2] = cosf(angle*PI_F/180.0f); a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = 0; a_pMat->m[3][1] = 0;                        a_pMat->m[3][2] = 0;                       a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitRotYMat4f( Mat4f *a_pMat, float angle )
+{
+	a_pMat->m[0][0] = cosf(angle*PI_F/180.0f);  a_pMat->m[0][1] = 0; a_pMat->m[0][2] = -sinf(angle*PI_F/180.0f); a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0;                        a_pMat->m[1][1] = 1; a_pMat->m[1][2] = 0;                        a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = sinf(angle*PI_F/180.0f);  a_pMat->m[2][1] = 0; a_pMat->m[2][2] = cosf(angle*PI_F/180.0f);  a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = 0;                        a_pMat->m[3][1] = 0; a_pMat->m[3][2] = 0;                        a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitRotZMat4f( Mat4f *a_pMat, float angle )
+{
+	a_pMat->m[0][0] = cosf(angle*PI_F/180.0f);  a_pMat->m[0][1] = sinf(angle*PI_F/180.0f); a_pMat->m[0][2] = 0; a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = -sinf(angle*PI_F/180.0f); a_pMat->m[1][1] = cosf(angle*PI_F/180.0f); a_pMat->m[1][2] = 0; a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0;                        a_pMat->m[2][1] = 0; 					   a_pMat->m[2][2] = 1; a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = 0;                        a_pMat->m[3][1] = 0;                       a_pMat->m[3][2] = 0; a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitRotArbAxisMat4f( Mat4f *a_pMat, Vec3f *a_pAxis, float angle )
+{
+	float c = cosf(angle*PI_F/180.0f);
+	float mC = 1.0f-c;
+	float s = sinf(angle*PI_F/180.0f);
+	a_pMat->m[0][0] = c                          + (a_pAxis->x*a_pAxis->x*mC); a_pMat->m[0][1] = (a_pAxis->y*a_pAxis->x*mC) + (a_pAxis->z*s);             a_pMat->m[0][2] = (a_pAxis->z*a_pAxis->x*mC) - (a_pAxis->y*s);             a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = (a_pAxis->x*a_pAxis->y*mC) - (a_pAxis->z*s);             a_pMat->m[1][1] = c                          + (a_pAxis->y*a_pAxis->y*mC); a_pMat->m[1][2] = (a_pAxis->z*a_pAxis->y*mC) + (a_pAxis->x*s);             a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = (a_pAxis->x*a_pAxis->z*mC) + (a_pAxis->y*s);             a_pMat->m[2][1] = (a_pAxis->y*a_pAxis->z*mC) - (a_pAxis->x*s);             a_pMat->m[2][2] = c                          + (a_pAxis->z*a_pAxis->z*mC); a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = 0;                                                       a_pMat->m[3][1] = 0;                                                       a_pMat->m[3][2] = 0;                                                       a_pMat->m[3][3] = 1;
+}
+
+inline
+void InitPerspectiveProjectionMat4f( Mat4f *a_pMat, uint64_t width, uint64_t height, float a_hFOV, float a_vFOV, float nearPlane, float farPlane )
+{
+	float thFOV = tanf(a_hFOV*PI_F/360);
+	float tvFOV = tanf(a_vFOV*PI_F/360);
+	float nMinF = (nearPlane-farPlane);
+	float xmax = nearPlane * thFOV;
+	float ymax = nearPlane * tvFOV;
+  	float ymin = -ymax;
+  	float xmin = -xmax;
+  	float w = xmax - xmin;
+  	float h = ymax - ymin;
+  	float aspect = height / (float)width;
+	a_pMat->m[0][0] = 2.0f*nearPlane*aspect/(w*thFOV); a_pMat->m[0][1] = 0;                        a_pMat->m[0][2] = 0;                               a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0;                               a_pMat->m[1][1] = 2.0f*nearPlane/(h*tvFOV); a_pMat->m[1][2] = 0;                               a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0;                               a_pMat->m[2][1] = 0;                        a_pMat->m[2][2] = (farPlane+nearPlane)/nMinF;      a_pMat->m[2][3] = -1.0f;
+	a_pMat->m[3][0] = 0;                               a_pMat->m[3][1] = 0;                        a_pMat->m[3][2] = 2.0f*(farPlane*nearPlane)/nMinF; a_pMat->m[3][3] = 0;
+}
+
+inline
+void Mat4fMult( Mat4f *__restrict a, Mat4f *__restrict b, Mat4f *__restrict out)
+{
+	out->m[0][0] = a->m[0][0]*b->m[0][0] + a->m[0][1]*b->m[1][0] + a->m[0][2]*b->m[2][0] + a->m[0][3]*b->m[3][0];
+	out->m[0][1] = a->m[0][0]*b->m[0][1] + a->m[0][1]*b->m[1][1] + a->m[0][2]*b->m[2][1] + a->m[0][3]*b->m[3][1];
+	out->m[0][2] = a->m[0][0]*b->m[0][2] + a->m[0][1]*b->m[1][2] + a->m[0][2]*b->m[2][2] + a->m[0][3]*b->m[3][2];
+	out->m[0][3] = a->m[0][0]*b->m[0][3] + a->m[0][1]*b->m[1][3] + a->m[0][2]*b->m[2][3] + a->m[0][3]*b->m[3][3];
+
+	out->m[1][0] = a->m[1][0]*b->m[0][0] + a->m[1][1]*b->m[1][0] + a->m[1][2]*b->m[2][0] + a->m[1][3]*b->m[3][0];
+	out->m[1][1] = a->m[1][0]*b->m[0][1] + a->m[1][1]*b->m[1][1] + a->m[1][2]*b->m[2][1] + a->m[1][3]*b->m[3][1];
+	out->m[1][2] = a->m[1][0]*b->m[0][2] + a->m[1][1]*b->m[1][2] + a->m[1][2]*b->m[2][2] + a->m[1][3]*b->m[3][2];
+	out->m[1][3] = a->m[1][0]*b->m[0][3] + a->m[1][1]*b->m[1][3] + a->m[1][2]*b->m[2][3] + a->m[1][3]*b->m[3][3];
+
+	out->m[2][0] = a->m[2][0]*b->m[0][0] + a->m[2][1]*b->m[1][0] + a->m[2][2]*b->m[2][0] + a->m[2][3]*b->m[3][0];
+	out->m[2][1] = a->m[2][0]*b->m[0][1] + a->m[2][1]*b->m[1][1] + a->m[2][2]*b->m[2][1] + a->m[2][3]*b->m[3][1];
+	out->m[2][2] = a->m[2][0]*b->m[0][2] + a->m[2][1]*b->m[1][2] + a->m[2][2]*b->m[2][2] + a->m[2][3]*b->m[3][2];
+	out->m[2][3] = a->m[2][0]*b->m[0][3] + a->m[2][1]*b->m[1][3] + a->m[2][2]*b->m[2][3] + a->m[2][3]*b->m[3][3];
+
+	out->m[3][0] = a->m[3][0]*b->m[0][0] + a->m[3][1]*b->m[1][0] + a->m[3][2]*b->m[2][0] + a->m[3][3]*b->m[3][0];
+	out->m[3][1] = a->m[3][0]*b->m[0][1] + a->m[3][1]*b->m[1][1] + a->m[3][2]*b->m[2][1] + a->m[3][3]*b->m[3][1];
+	out->m[3][2] = a->m[3][0]*b->m[0][2] + a->m[3][1]*b->m[1][2] + a->m[3][2]*b->m[2][2] + a->m[3][3]*b->m[3][2];
+	out->m[3][3] = a->m[3][0]*b->m[0][3] + a->m[3][1]*b->m[1][3] + a->m[3][2]*b->m[2][3] + a->m[3][3]*b->m[3][3];
+}
+
+inline
+float DeterminantUpper3x3Mat4f( Mat4f *a_pMat )
+{
+	return (a_pMat->m[0][0] * ((a_pMat->m[1][1]*a_pMat->m[2][2]) - (a_pMat->m[1][2]*a_pMat->m[2][1]))) + 
+		   (a_pMat->m[0][1] * ((a_pMat->m[2][0]*a_pMat->m[1][2]) - (a_pMat->m[1][0]*a_pMat->m[2][2]))) + 
+		   (a_pMat->m[0][2] * ((a_pMat->m[1][0]*a_pMat->m[2][1]) - (a_pMat->m[2][0]*a_pMat->m[1][1])));
+}
+
+inline
+void InverseUpper3x3Mat4f( Mat4f *__restrict a_pMat, Mat4f *__restrict out )
+{
+	float fDet = DeterminantUpper3x3Mat4f( a_pMat );
+#if MAIN_DEBUG
+	assert( fDet != 0.f );
+#endif
+	float fInvDet = 1.0f / fDet;
+	out->m[0][0] = fInvDet * ((a_pMat->m[1][1]*a_pMat->m[2][2]) - (a_pMat->m[1][2]*a_pMat->m[2][1]));
+	out->m[0][1] = fInvDet * ((a_pMat->m[0][2]*a_pMat->m[2][1]) - (a_pMat->m[0][1]*a_pMat->m[2][2]));
+	out->m[0][2] = fInvDet * ((a_pMat->m[0][1]*a_pMat->m[1][2]) - (a_pMat->m[0][2]*a_pMat->m[1][1]));
+	out->m[0][3] = 0.0f;
+
+	out->m[1][0] = fInvDet * ((a_pMat->m[2][0]*a_pMat->m[1][2]) - (a_pMat->m[2][2]*a_pMat->m[1][0]));
+	out->m[1][1] = fInvDet * ((a_pMat->m[0][0]*a_pMat->m[2][2]) - (a_pMat->m[0][2]*a_pMat->m[2][0])); 
+	out->m[1][2] = fInvDet * ((a_pMat->m[0][2]*a_pMat->m[1][0]) - (a_pMat->m[1][2]*a_pMat->m[0][0]));
+	out->m[1][3] = 0.0f;
+
+	out->m[2][0] = fInvDet * ((a_pMat->m[1][0]*a_pMat->m[2][1]) - (a_pMat->m[1][1]*a_pMat->m[2][0]));
+	out->m[2][1] = fInvDet * ((a_pMat->m[0][1]*a_pMat->m[2][0]) - (a_pMat->m[0][0]*a_pMat->m[2][1]));
+	out->m[2][2] = fInvDet * ((a_pMat->m[0][0]*a_pMat->m[1][1]) - (a_pMat->m[1][0]*a_pMat->m[0][1]));
+	out->m[2][3] = 0.0f;
+
+	out->m[3][0] = 0.0f;
+	out->m[3][1] = 0.0f;
+	out->m[3][2] = 0.0f;
+	out->m[3][3] = 1.0f;
+}
+
+inline
+void InverseTransposeUpper3x3Mat4f( Mat4f *__restrict a_pMat, Mat4f *__restrict out )
+{
+	float fDet = DeterminantUpper3x3Mat4f( a_pMat );
+#if MAIN_DEBUG
+	assert( fDet != 0.f );
+#endif
+	float fInvDet = 1.0f / fDet;
+	out->m[0][0] = fInvDet * ((a_pMat->m[1][1]*a_pMat->m[2][2]) - (a_pMat->m[1][2]*a_pMat->m[2][1]));
+	out->m[0][1] = fInvDet * ((a_pMat->m[2][0]*a_pMat->m[1][2]) - (a_pMat->m[2][2]*a_pMat->m[1][0]));
+	out->m[0][2] = fInvDet * ((a_pMat->m[1][0]*a_pMat->m[2][1]) - (a_pMat->m[1][1]*a_pMat->m[2][0]));
+	out->m[0][3] = 0.0f;
+
+	out->m[1][0] = fInvDet * ((a_pMat->m[0][2]*a_pMat->m[2][1]) - (a_pMat->m[0][1]*a_pMat->m[2][2]));
+	out->m[1][1] = fInvDet * ((a_pMat->m[0][0]*a_pMat->m[2][2]) - (a_pMat->m[0][2]*a_pMat->m[2][0])); 
+	out->m[1][2] = fInvDet * ((a_pMat->m[0][1]*a_pMat->m[2][0]) - (a_pMat->m[0][0]*a_pMat->m[2][1]));
+	out->m[1][3] = 0.0f;
+
+	out->m[2][0] = fInvDet * ((a_pMat->m[0][1]*a_pMat->m[1][2]) - (a_pMat->m[0][2]*a_pMat->m[1][1]));
+	out->m[2][1] = fInvDet * ((a_pMat->m[0][2]*a_pMat->m[1][0]) - (a_pMat->m[1][2]*a_pMat->m[0][0]));
+	out->m[2][2] = fInvDet * ((a_pMat->m[0][0]*a_pMat->m[1][1]) - (a_pMat->m[1][0]*a_pMat->m[0][1]));
+	out->m[2][3] = 0.0f;
+
+	out->m[3][0] = 0.0f;
+	out->m[3][1] = 0.0f;
+	out->m[3][2] = 0.0f;
+	out->m[3][3] = 1.0f;
+}
+
+inline
+void InverseTransposeUpper3x3Mat3f( Mat4f *__restrict a_pMat, Mat3f *__restrict out )
+{
+	float fDet = DeterminantUpper3x3Mat4f( a_pMat );
+#if MAIN_DEBUG
+	assert( fDet != 0.f );
+#endif
+	float fInvDet = 1.0f / fDet;
+	out->m[0][0] = fInvDet * ((a_pMat->m[1][1]*a_pMat->m[2][2]) - (a_pMat->m[1][2]*a_pMat->m[2][1]));
+	out->m[0][1] = fInvDet * ((a_pMat->m[2][0]*a_pMat->m[1][2]) - (a_pMat->m[2][2]*a_pMat->m[1][0]));
+	out->m[0][2] = fInvDet * ((a_pMat->m[1][0]*a_pMat->m[2][1]) - (a_pMat->m[1][1]*a_pMat->m[2][0]));
+
+	out->m[1][0] = fInvDet * ((a_pMat->m[0][2]*a_pMat->m[2][1]) - (a_pMat->m[0][1]*a_pMat->m[2][2]));
+	out->m[1][1] = fInvDet * ((a_pMat->m[0][0]*a_pMat->m[2][2]) - (a_pMat->m[0][2]*a_pMat->m[2][0])); 
+	out->m[1][2] = fInvDet * ((a_pMat->m[0][1]*a_pMat->m[2][0]) - (a_pMat->m[0][0]*a_pMat->m[2][1]));
+
+	out->m[2][0] = fInvDet * ((a_pMat->m[0][1]*a_pMat->m[1][2]) - (a_pMat->m[0][2]*a_pMat->m[1][1]));
+	out->m[2][1] = fInvDet * ((a_pMat->m[0][2]*a_pMat->m[1][0]) - (a_pMat->m[1][2]*a_pMat->m[0][0]));
+	out->m[2][2] = fInvDet * ((a_pMat->m[0][0]*a_pMat->m[1][1]) - (a_pMat->m[1][0]*a_pMat->m[0][1]));
+}
+
+inline
+void Vec3fAdd( Vec3f *a, Vec3f *b, Vec3f *out )
+{
+	out->x = a->x + b->x;
+	out->y = a->y + b->y;
+	out->z = a->z + b->z;
+}
+
+inline
+void Vec3fMult( Vec3f *a, Vec3f *b, Vec3f *out )
+{
+	out->x = a->x * b->x;
+	out->y = a->y * b->y;
+	out->z = a->z * b->z;
+}
+
+inline
+void Vec3fCross( Vec3f *a, Vec3f *b, Vec3f *out )
+{
+	out->x = (a->y * b->z) - (a->z * b->y);
+	out->y = (a->z * b->x) - (a->x * b->z);
+	out->z = (a->x * b->y) - (a->y * b->x);
+}
+
+inline
+void Vec3fScale( Vec3f *a, float scale, Vec3f *out )
+{
+	out->x = a->x * scale;
+	out->y = a->y * scale;
+	out->z = a->z * scale;
+}
+
+inline
+float Vec3fDot( Vec3f *a, Vec3f *b )
+{
+	return (a->x * b->x) + (a->y * b->y) + (a->z * b->z);
+}
+
+inline
+void Vec3fNormalize( Vec3f *a, Vec3f *out )
+{
+
+	float mag = sqrtf((a->x*a->x) + (a->y*a->y) + (a->z*a->z));
+	if(mag == 0)
+	{
+		out->x = 0;
+		out->y = 0;
+		out->z = 0;
+	}
+	else
+	{
+		out->x = a->x/mag;
+		out->y = a->y/mag;
+		out->z = a->z/mag;
+	}
+}
+
+inline
+void InitUnitQuatf( Quatf *q, float angle, Vec3f *axis )
+{
+	float s = sinf(angle*PI_F/360.0f);
+	q->w = cosf(angle*PI_F/360.0f);
+	q->x = axis->x * s;
+	q->y = axis->y * s;
+	q->z = axis->z * s;
+}
+
+inline
+void QuatfMult( Quatf *__restrict a, Quatf *__restrict b, Quatf *__restrict out )
+{
+	out->w = (a->w * b->w) - (a->x* b->x) - (a->y* b->y) - (a->z* b->z);
+	out->x = (a->w * b->x) + (a->x* b->w) + (a->y* b->z) - (a->z* b->y);
+	out->y = (a->w * b->y) + (a->y* b->w) + (a->z* b->x) - (a->x* b->z);
+	out->z = (a->w * b->z) + (a->z* b->w) + (a->x* b->y) - (a->y* b->x);
+}
+
+inline
+void InitViewMat4ByQuatf( Mat4f *a_pMat, float horizontalAngle, float verticalAngle, Vec3f *a_pPos )
+{
+	Quatf qHor, qVert;
+	Vec3f vertAxis = {cosf(horizontalAngle*PI_F/180.0f),0,sinf(horizontalAngle*PI_F/180.0f)};
+	Vec3f horAxis = {0,1,0};
+	InitUnitQuatf( &qVert, -verticalAngle, &vertAxis );
+	InitUnitQuatf( &qHor, -horizontalAngle, &horAxis );
+
+	Quatf qRot;
+	QuatfMult( &qVert, &qHor, &qRot);
+
+	a_pMat->m[0][0] = 1.0f - 2.0f*(qRot.y*qRot.y + qRot.z*qRot.z);                                        a_pMat->m[0][1] = 2.0f*(qRot.x*qRot.y - qRot.w*qRot.z);                                               a_pMat->m[0][2] = 2.0f*(qRot.x*qRot.z + qRot.w*qRot.y);        		                                  a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 2.0f*(qRot.x*qRot.y + qRot.w*qRot.z);                                               a_pMat->m[1][1] = 1.0f - 2.0f*(qRot.x*qRot.x + qRot.z*qRot.z);                                        a_pMat->m[1][2] = 2.0f*(qRot.y*qRot.z - qRot.w*qRot.x);        		                                  a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 2.0f*(qRot.x*qRot.z - qRot.w*qRot.y);                                               a_pMat->m[2][1] = 2.0f*(qRot.y*qRot.z + qRot.w*qRot.x);                                               a_pMat->m[2][2] = 1.0f - 2.0f*(qRot.x*qRot.x + qRot.y*qRot.y); 		                                  a_pMat->m[2][3] = 0;
+	a_pMat->m[3][0] = -a_pPos->x*a_pMat->m[0][0] - a_pPos->y*a_pMat->m[1][0] - a_pPos->z*a_pMat->m[2][0]; a_pMat->m[3][1] = -a_pPos->x*a_pMat->m[0][1] - a_pPos->y*a_pMat->m[1][1] - a_pPos->z*a_pMat->m[2][1]; a_pMat->m[3][2] = -a_pPos->x*a_pMat->m[0][2] - a_pPos->y*a_pMat->m[1][2] - a_pPos->z*a_pMat->m[2][2]; a_pMat->m[3][3] = 1;
+}
+
+void PrintMat4f( Mat4f *a_pMat )
+{
+	for( uint32_t dwIdx = 0; dwIdx < 4; ++dwIdx )
+	{
+		for( uint32_t dwJdx = 0; dwJdx < 4; ++dwJdx )
+		{
+			printf("%f ", a_pMat->m[dwIdx][dwJdx] );
+		}
+		printf("\n");
+	}
+}
+
+float clamp(float d, float min, float max) {
+  const float t = d < min ? min : d;
+  return t > max ? max : t;
+}
 
 void CloseProgram()
 {
 	Running = 0;
+}
+
+inline
+void CenterCursor( HWND Window )
+{
+    GetWindowRect(Window, &winRect);
+    midX = winRect.left + (screen_width / 2);
+    midY = winRect.top + (screen_height / 2);
+    snapPosRect.left = (int32_t)midX;
+    snapPosRect.right = (int32_t)midX;
+    snapPosRect.top = (int32_t)midY;
+    snapPosRect.bottom = (int32_t)midY;
+    if( !isPaused )
+    {
+        ClipCursor(&snapPosRect);
+    }	
+}
+
+
+void Pause()
+{
+	if( !isPaused )
+	{
+		isPaused = 1;
+    	ClipCursor( NULL );
+    	ShowCursor( TRUE );
+	}
+}
+
+void TogglePause()
+{
+	isPaused = isPaused ^ 1;
+    if( isPaused )
+    {
+    	ClipCursor( NULL );
+    	ShowCursor( TRUE );
+    }
+    else
+    {
+    	ClipCursor(&snapPosRect);
+    	ShowCursor( FALSE );
+    }
+}
+
+//look into display modes
+//https://stackoverflow.com/questions/7193197/is-there-a-graceful-way-to-handle-toggling-between-fullscreen-and-windowed-mode
+void Fullscreen( HWND WindowHandle )
+{
+	isFullscreen = isFullscreen ^ 1;
+	if( isFullscreen )
+	{
+		nonFullScreenRect.left = winRect.left;
+		nonFullScreenRect.right = winRect.right;
+		nonFullScreenRect.bottom = winRect.bottom;
+		nonFullScreenRect.top = winRect.top;
+		SetWindowLong(WindowHandle, GWL_STYLE, WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VISIBLE );
+		HMONITOR hmon = MonitorFromWindow(WindowHandle, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO mi = { sizeof(mi) };
+        GetMonitorInfo(hmon, &mi);
+		screen_width = mi.rcMonitor.right - mi.rcMonitor.left;
+    	screen_height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+    	MoveWindow(WindowHandle,mi.rcMonitor.left,mi.rcMonitor.top,(int32_t)screen_width,(int32_t)screen_height, FALSE );
+        glViewport(0, 0, screen_width, screen_height); 
+        CenterCursor( WindowHandle );
+	}
+	else
+	{
+		SetWindowLongPtr(WindowHandle, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+		screen_width = nonFullScreenRect.right - nonFullScreenRect.left;
+    	screen_height = nonFullScreenRect.bottom - nonFullScreenRect.top;
+    	MoveWindow(WindowHandle,nonFullScreenRect.left,nonFullScreenRect.top,(int32_t)screen_width,(int32_t)screen_height, FALSE );
+        glViewport(0, 0, screen_width, screen_height); 
+        CenterCursor( WindowHandle );
+	}
 }
 
 LRESULT CALLBACK
@@ -85,13 +674,13 @@ Win32MainWindowCallback(
     {
     	screen_width = LOWORD(LParam);
     	screen_height = HIWORD(LParam);
-        //glViewport(0, 0, screen_width, screen_height); //needed for window resizing
-        //CenterCursor( Window );
+        glViewport(0, 0, screen_width, screen_height); //needed for window resizing
+        CenterCursor( Window );
     }break;
 
     case WM_MOVE:
     {
-    	//CenterCursor( Window );
+    	CenterCursor( Window );
     }break;
 
     case WM_GETMINMAXINFO:
@@ -254,6 +843,7 @@ inline void loadGLFuncPtrs()
             glEnableVertexAttribArray = (void(__stdcall*)(GLuint index))((void*)wglGetProcAddress("glEnableVertexAttribArray"));
         	glGetUniformLocation = (GLint(__stdcall *)(GLuint program, const GLchar *name))((void*)wglGetProcAddress("glGetUniformLocation"));
         	glUniformMatrix4fv = (void(__stdcall *)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))((void*)wglGetProcAddress("glUniformMatrix4fv"));
+            glUniformMatrix3fv = (void(__stdcall *)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))((void*)wglGetProcAddress("glUniformMatrix3fv"));
         	glUniform3fv = (void(__stdcall *)( GLint location, GLsizei count, const GLfloat *value))((void*)wglGetProcAddress("glUniform3fv"));
         	glUniform4fv = (void(__stdcall *)( GLint location, GLsizei count, const GLfloat *value))((void*)wglGetProcAddress("glUniform4fv"));
         } break;
@@ -306,34 +896,26 @@ inline GLuint compileShaderProgram(GLuint vertexShader, GLuint fragmentShader)
     return program;
 }
 
-struct Vertex
-{
-    Vec3 vPos;
-    Vec3 vNormal;
-};
+const uint32_t NUM_MODELS = 5;
+GLuint modelVAOs[NUM_MODELS];
+Mat4f mModelMatrices[NUM_MODELS];
+Mat3f mNormalMatrices[NUM_MODELS];
+uint32_t modelIndexCount[NUM_MODELS];
 
 //https://github.com/yosmo78/Win32OpenGL-FPSCamera
 void LoadMeshes()
 {
-    const uint32_t NUM_MODELS = 5;
-
-
-    
-
-
-
-
     GLuint VBOs[NUM_MODELS];
     GLuint EBOs[NUM_MODELS];
-    glGenVertexArrays(2, modelVAOs);
-    glGenBuffers(2, VBOs);
-    glGenBuffers(2, EBOs);
+    glGenVertexArrays(NUM_MODELS, modelVAOs);
+    glGenBuffers(NUM_MODELS, VBOs);
+    glGenBuffers(NUM_MODELS, EBOs);
 
     // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure vertex attributes(s).
     glBindVertexArray(modelVAOs[0]); //can only bind one VAO at a time
 
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[0]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(??), ??, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(arcadebutton_buttonVerts), arcadebutton_buttonVerts, GL_STATIC_DRAW);
     // position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
@@ -341,24 +923,85 @@ void LoadMeshes()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-
     //FOR EAO's
     // The index buffer binding is stored within the VAO. If no VAO is bound, then you cannot bind a buffer object to GL_ELEMENT_ARRAY_BUFFER (this might not be true, so verify). Meaning GL_ELEMENT_ARRAY_BUFFER is not global like GL_ARRAY_BUFFER 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[0]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cubeIndicies), cubeIndicies, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(arcadebutton_buttonIndices), arcadebutton_buttonIndices, GL_STATIC_DRAW);
+
+    modelIndexCount[0] = arcadebutton_buttonIndicesCount;
+
+    InitMat4f( &mModelMatrices[0] );
+    InverseTransposeUpper3x3Mat3f(&mModelMatrices[0],&mNormalMatrices[0]);
 
     glBindVertexArray(modelVAOs[1]);
     glBindBuffer(GL_ARRAY_BUFFER, VBOs[1]);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(planeVertices), planeVertices, GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)0);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(arcadebutton_buttonbaseVerts), arcadebutton_buttonbaseVerts, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 10 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
-
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[1]);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(planeIndices), planeIndices, GL_STATIC_DRAW);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(arcadebutton_buttonbaseIndices), arcadebutton_buttonbaseIndices, GL_STATIC_DRAW);
 
+    modelIndexCount[1] = arcadebutton_buttonbaseIndicesCount;
+
+    InitMat4f( &mModelMatrices[1] );
+    InverseTransposeUpper3x3Mat3f(&mModelMatrices[1],&mNormalMatrices[1]);
+
+    glBindVertexArray(modelVAOs[2]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[2]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(arcadebutton_buttondeskVerts), arcadebutton_buttondeskVerts, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[2]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(arcadebutton_buttondeskIndices), arcadebutton_buttondeskIndices, GL_STATIC_DRAW);
+
+    modelIndexCount[2] = arcadebutton_buttondeskIndicesCount;
+
+    InitMat4f( &mModelMatrices[2] );
+    InverseTransposeUpper3x3Mat3f(&mModelMatrices[2],&mNormalMatrices[2]);
+
+    glBindVertexArray(modelVAOs[3]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[3]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(ButtonBaseVerts), ButtonBaseVerts, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[3]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ButtonBaseIndices), ButtonBaseIndices, GL_STATIC_DRAW);
+
+    modelIndexCount[3] = ButtonBaseIndicesCount;
+
+    InitMat4f( &mModelMatrices[3] );
+    InverseTransposeUpper3x3Mat3f(&mModelMatrices[3],&mNormalMatrices[3]);
+
+    glBindVertexArray(modelVAOs[4]);
+    glBindBuffer(GL_ARRAY_BUFFER, VBOs[4]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(ButtonTopVerts), ButtonTopVerts, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBOs[4]);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(ButtonTopIndices), ButtonTopIndices, GL_STATIC_DRAW);
+
+    modelIndexCount[4] = ButtonTopIndicesCount;
+
+    InitMat4f( &mModelMatrices[4] );
+    InverseTransposeUpper3x3Mat3f(&mModelMatrices[4],&mNormalMatrices[4]);
+
+    glBindVertexArray(0);
 }
+
+bool movingForward = false;
+bool movingLeft = false;
+bool movingRight = false;
+bool movingBackwards = false;
+bool movingUp = false;
+bool movingDown = false;
 
 #if MAIN_DEBUG
 int main()
@@ -389,7 +1032,24 @@ int APIENTRY WinMain(
     LARGE_INTEGER LastCounter;
     QueryPerformanceCounter(&LastCounter);
 
+    RAWINPUTDEVICE Rid[1];
+	Rid[0].usUsagePage = ((USHORT) 0x01); 
+	Rid[0].usUsage = ((USHORT) 0x02); 
+	Rid[0].dwFlags = RIDEV_INPUTSINK;   
+	Rid[0].hwndTarget = WindowHandle;
+	RegisterRawInputDevices(Rid, 1, sizeof(Rid[0]));
+
     Running = 1;
+    isPaused = 0;
+    isFullscreen = 0;
+
+    CenterCursor( WindowHandle );
+    
+    ShowCursor( FALSE );
+
+    position = { 0.0f,0.0f,0.0f };
+    rotHor = 0.0f;
+    rotVert = 0.0f;
 
     const char vertexShader[] =
     #include "vertShader.glsl"
@@ -402,6 +1062,10 @@ int APIENTRY WinMain(
     GLuint vertShaderID = LoadShaderFromString(vertexShader,GL_VERTEX_SHADER,"Vertex Shader");
     GLuint fragShaderID = LoadShaderFromString(fragmentShader,GL_FRAGMENT_SHADER,"Fragment Shader");
     GLuint shaderProgramID = compileShaderProgram(vertShaderID,fragShaderID);
+
+    GLint modelUniformLoc = glGetUniformLocation(shaderProgramID, "mModel");
+	GLint normalUniformLoc = glGetUniformLocation(shaderProgramID, "mNormal");
+    GLint projViewUniformLoc = glGetUniformLocation(shaderProgramID, "mViewProj");
 
     while( Running )
     {
@@ -422,8 +1086,10 @@ int APIENTRY WinMain(
         sprintf(&buf[0],"The Button: fps %f",FPS);
         SetWindowTextA( WindowHandle, &buf[0]);
 #endif
-        MSG Message;eveexsh
-        
+
+        Vec2f frameRot = { 0, 0 };
+
+        MSG Message;
         while (PeekMessage(&Message, 0, 0, 0, PM_REMOVE))
         {
         	switch(Message.message)
@@ -433,32 +1099,117 @@ int APIENTRY WinMain(
         			CloseProgram();
         			break;
         		}
-        		case WM_SYSKEYDOWN:
-          		case WM_SYSKEYUP:
-          		case WM_KEYDOWN:
-          		case WM_KEYUP:
-          		{
-          			uint32_t VKCode = (uint32_t) Message.wParam;
-              		bool WasDown = (Message.lParam & (1<<30)) != 0;
-              		bool IsDown = (Message.lParam & (1<<31)) == 0;
-              		bool AltKeyWasDown = (Message.lParam & (1 << 29));
-              		switch(VKCode)
-              		{
-              			case VK_F4:
-              			{
-              				if(AltKeyWasDown)
-              				{
-              					CloseProgram();
-              				}
-              				break;
-              			}
-              			default:
-              			{
-              				break;
-              			}
-              		}
-          			break;
-          		}
+                case WM_SYSKEYDOWN:
+                case WM_SYSKEYUP:
+                case WM_KEYDOWN:
+                case WM_KEYUP:
+                {
+                	uint32_t VKCode = (uint32_t) Message.wParam;
+                	bool WasDown = (Message.lParam & (1<<30)) != 0;
+                	bool IsDown = (Message.lParam & (1<<31)) == 0;
+                	bool AltKeyWasDown = (Message.lParam & (1 << 29));
+                	switch(VKCode)
+                	{
+                		case VK_UP:
+                		case 'W':
+                		{
+                			if(WasDown != IsDown)
+                			{
+                				movingForward = IsDown;
+                			}
+                			break;
+                		}
+                		case VK_DOWN:
+                		case 'S':
+                		{
+                			if(WasDown != IsDown)
+                			{
+                				movingBackwards = IsDown;
+                			}
+                			break;
+                		}
+                		case VK_LEFT:
+                		case 'A':
+                		{
+                			if(WasDown != IsDown)
+                			{
+                				movingLeft = IsDown;
+                			}
+                			break;
+                		}
+                		case VK_RIGHT:
+                		case 'D':
+                		{
+                			if(WasDown != IsDown)
+                			{
+                				movingRight = IsDown;
+                			}
+                			break;
+                		}
+                		case 'F':
+                		{
+                			if(WasDown != 1 && WasDown != IsDown)
+                			{
+                				Fullscreen( WindowHandle );
+                			}
+                			break;
+                		}
+                		case VK_SPACE:
+                		{
+                			if(WasDown != IsDown)
+                			{
+                				movingUp = IsDown;
+                			}
+                			break;
+                		}
+                		case VK_SHIFT:
+                		{
+                			if(WasDown != IsDown)
+                			{
+                				movingDown = IsDown;
+                			}
+                    		break;
+                		}
+                		case VK_ESCAPE:
+                		{
+                			if(WasDown != 1 && WasDown != IsDown)
+                			{
+                				TogglePause();
+                			}
+                			break;
+                		}
+                		case VK_F4:
+                		{
+                			if(AltKeyWasDown)
+                			{
+                				CloseProgram();
+                			}
+                			break;
+                		}
+                		default:
+                		{
+                			break;
+                		}
+                	}
+                	break;
+                }
+                case WM_INPUT:
+                {
+                	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-rawmouse
+                	UINT dwSize = sizeof(RAWINPUT);
+    				static BYTE lpb[sizeof(RAWINPUT)];
+
+    				GetRawInputData((HRAWINPUT)Message.lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+				
+    				RAWINPUT* raw = (RAWINPUT*)lpb;
+				
+    				if (raw->header.dwType == RIM_TYPEMOUSE) 
+    				{
+    				    frameRot.x += raw->data.mouse.lLastX;
+    				    frameRot.y += raw->data.mouse.lLastY;
+    				}
+                	break;
+                }
         		default:
         		{
         			TranslateMessage(&Message);
@@ -468,15 +1219,76 @@ int APIENTRY WinMain(
         	}
         }
 
+        if(!isPaused)
+        {
+        	Vec2f forwardOrientation = { sinf(rotHor*PI_F/180.0f), cosf(rotHor*PI_F/180.0f) };
+        	Vec2f rightOrientation = { sinf((rotHor-90)*PI_F/180.0f), cosf((rotHor-90)*PI_F/180.0f) };
+            Vec3f positionChange = {0.0f,0.0f,0.0f};
+        	if(movingForward)
+        	{
+        		positionChange.x += forwardOrientation.x;
+              	positionChange.z -= forwardOrientation.y;
+        	}
+        	if(movingLeft)
+        	{
+        		positionChange.x += rightOrientation.x;
+              	positionChange.z -= rightOrientation.y;
+        	}
+        	if(movingRight)
+        	{
+              	positionChange.x -= rightOrientation.x;
+              	positionChange.z += rightOrientation.y;
+        	}
+        	if(movingBackwards)
+        	{
+        		positionChange.x -= forwardOrientation.x;
+              	positionChange.z += forwardOrientation.y;
+        	}
+        	if(movingUp)
+        	{
+        		positionChange.y += 1;
+        	}
+        	if(movingDown)
+        	{
+        		positionChange.y -= 1;
+        	}
 
-        //bind default shaders
+        	Vec3f oldPos;
+            oldPos.x = position.x;
+            oldPos.y = position.y;
+            oldPos.z = position.z;
+            Vec3f val;
+            //normalize positionChange maybe?
+            Vec3fScale(&positionChange,speed*deltaTime,&val);
+        	Vec3fAdd( &oldPos, &val, &position );
+            rotHor  = fmodf(rotHor  + deltaTime*mouseSensitivity*frameRot.x, 360.0f );
+            rotVert = clamp(rotVert + deltaTime*mouseSensitivity*frameRot.y, -90.0f, 90.0f);
+        }
+
+	    glEnable(GL_DEPTH_TEST);
+	    glEnable(GL_CULL_FACE); 
+        glClearColor(0.5294f, 0.8078f, 0.9216f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(shaderProgramID);
 
+        Mat4f viewMatrix;
+        InitViewMat4ByQuatf( &viewMatrix, rotHor, rotVert, &position );
 
+        Mat4f projectMatrix;
+        InitPerspectiveProjectionMat4f(&projectMatrix, screen_width, screen_height, hFov, vFov, 0.04f, 8000.0f );
+        Mat4f viewProjMatrix;
+        Mat4fMult(&viewMatrix, &projectMatrix, &viewProjMatrix);
+	    glUniformMatrix4fv(projViewUniformLoc, 1, GL_FALSE,(const GLfloat *)viewProjMatrix.m);
+
+        for( uint32_t mesh =0; mesh < NUM_MODELS; ++mesh )
+        {
+            glBindVertexArray(modelVAOs[mesh]);
+            glUniformMatrix4fv(modelUniformLoc, 1, GL_FALSE,(const GLfloat *)mModelMatrices[mesh].m);
+            glUniformMatrix3fv(normalUniformLoc, 1, GL_FALSE,(const GLfloat *)mNormalMatrices[mesh].m);
+            glDrawElements(GL_TRIANGLES, modelIndexCount[mesh], GL_UNSIGNED_INT, 0);
+        }
 
         SwapBuffers(hDC);
     }
-
-
 	return 0;
 }
