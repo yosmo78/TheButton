@@ -24,13 +24,108 @@
 
 #define STRINGIFY(x) #x
 
-#define GL_COMPILE_STATUS   	0x8B81
-#define GL_LINK_STATUS      	0x8B82
-#define GL_VERTEX_SHADER    	0x8B31
-#define GL_FRAGMENT_SHADER  	0x8B30
-#define GL_ARRAY_BUFFER     	0x8892
-#define GL_ELEMENT_ARRAY_BUFFER	0x8893
-#define GL_STATIC_DRAW      	0x88E4
+#define GL_COMPILE_STATUS   	    0x8B81
+#define GL_LINK_STATUS      	    0x8B82
+#define GL_VERTEX_SHADER    	    0x8B31
+#define GL_FRAGMENT_SHADER  	    0x8B30
+#define GL_ARRAY_BUFFER     	    0x8892
+#define GL_ELEMENT_ARRAY_BUFFER	    0x8893
+#define GL_STATIC_DRAW      	    0x88E4
+#define GL_TEXTURE0                 0x84C0
+#define GL_TEXTURE1                 0x84C1
+#define GL_TEXTURE2                 0x84C2
+#define GL_TEXTURE3                 0x84C3
+#define GL_TEXTURE4                 0x84C4
+#define GL_TEXTURE5                 0x84C5
+#define GL_TEXTURE6                 0x84C6
+#define GL_TEXTURE7                 0x84C7
+#define GL_TEXTURE8                 0x84C8
+#define GL_TEXTURE9                 0x84C9
+#define GL_TEXTURE10                0x84CA
+#define GL_TEXTURE11                0x84CB
+#define GL_TEXTURE12                0x84CC
+#define GL_TEXTURE13                0x84CD
+#define GL_TEXTURE14                0x84CE
+#define GL_TEXTURE15                0x84CF
+#define GL_TEXTURE16                0x84D0
+#define GL_TEXTURE17                0x84D1
+#define GL_TEXTURE18                0x84D2
+#define GL_TEXTURE19                0x84D3
+#define GL_TEXTURE20                0x84D4
+#define GL_TEXTURE21                0x84D5
+#define GL_TEXTURE22                0x84D6
+#define GL_TEXTURE23                0x84D7
+#define GL_TEXTURE24                0x84D8
+#define GL_TEXTURE25                0x84D9
+#define GL_TEXTURE26                0x84DA
+#define GL_TEXTURE27                0x84DB
+#define GL_TEXTURE28                0x84DC
+#define GL_TEXTURE29                0x84DD
+#define GL_TEXTURE30                0x84DE
+#define GL_TEXTURE31                0x84DF
+#define GL_ACTIVE_TEXTURE           0x84E0
+#define GL_CLAMP_TO_EDGE            0x812F
+#define GL_UNSIGNED_INT_24_8        0x84FA
+#define GL_DEPTH_COMPONENT16        0x81A5
+#define GL_DEPTH_COMPONENT24        0x81A6
+#define GL_DEPTH_COMPONENT32        0x81A7
+#define GL_DEPTH_COMPONENT32F       0x8CAC
+#define GL_DEPTH24_STENCIL8         0x88F0
+#define GL_DEPTH_STENCIL            0x84F9
+#define GL_MAX_COLOR_ATTACHMENTS    0x8CDF
+#define GL_COLOR_ATTACHMENT0        0x8CE0
+#define GL_COLOR_ATTACHMENT1        0x8CE1
+#define GL_COLOR_ATTACHMENT2        0x8CE2
+#define GL_COLOR_ATTACHMENT3        0x8CE3
+#define GL_COLOR_ATTACHMENT4        0x8CE4
+#define GL_COLOR_ATTACHMENT5        0x8CE5
+#define GL_COLOR_ATTACHMENT6        0x8CE6
+#define GL_COLOR_ATTACHMENT7        0x8CE7
+#define GL_COLOR_ATTACHMENT8        0x8CE8
+#define GL_COLOR_ATTACHMENT9        0x8CE9
+#define GL_COLOR_ATTACHMENT10       0x8CEA
+#define GL_COLOR_ATTACHMENT11       0x8CEB
+#define GL_COLOR_ATTACHMENT12       0x8CEC
+#define GL_COLOR_ATTACHMENT13       0x8CED
+#define GL_COLOR_ATTACHMENT14       0x8CEE
+#define GL_COLOR_ATTACHMENT15       0x8CEF
+#define GL_COLOR_ATTACHMENT16       0x8CF0
+#define GL_COLOR_ATTACHMENT17       0x8CF1
+#define GL_COLOR_ATTACHMENT18       0x8CF2
+#define GL_COLOR_ATTACHMENT19       0x8CF3
+#define GL_COLOR_ATTACHMENT20       0x8CF4
+#define GL_COLOR_ATTACHMENT21       0x8CF5
+#define GL_COLOR_ATTACHMENT22       0x8CF6
+#define GL_COLOR_ATTACHMENT23       0x8CF7
+#define GL_COLOR_ATTACHMENT24       0x8CF8
+#define GL_COLOR_ATTACHMENT25       0x8CF9
+#define GL_COLOR_ATTACHMENT26       0x8CFA
+#define GL_COLOR_ATTACHMENT27       0x8CFB
+#define GL_COLOR_ATTACHMENT28       0x8CFC
+#define GL_COLOR_ATTACHMENT29       0x8CFD
+#define GL_COLOR_ATTACHMENT30       0x8CFE
+#define GL_COLOR_ATTACHMENT31       0x8CFF
+#define GL_DEPTH_ATTACHMENT         0x8D00
+#define GL_STENCIL_ATTACHMENT       0x8D20
+#define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
+#define GL_FRAMEBUFFER              0x8D40
+#define GL_FRAMEBUFFER_COMPLETE     0x8CD5
+#define GL_READ_FRAMEBUFFER         0x8CA8
+#define GL_DRAW_FRAMEBUFFER         0x8CA9
+
+#define WGL_CONTEXT_DEBUG_BIT_ARB                 0x00000001
+#define WGL_CONTEXT_FORWARD_COMPATIBLE_BIT_ARB    0x00000002
+#define WGL_CONTEXT_MAJOR_VERSION_ARB             0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB             0x2092
+#define WGL_CONTEXT_LAYER_PLANE_ARB               0x2093
+#define WGL_CONTEXT_FLAGS_ARB                     0x2094
+#define ERROR_INVALID_VERSION_ARB                 0x2095
+#define WGL_CONTEXT_PROFILE_MASK_ARB      	      0x9126
+#define WGL_CONTEXT_CORE_PROFILE_BIT_ARB          0x00000001
+#define WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB 0x00000002
+#define ERROR_INVALID_PROFILE_ARB                 0x2096
+#define ERROR_INVALID_PIXEL_TYPE_ARB              0x2043
+#define ERROR_INCOMPATIBLE_DEVICE_CONTEXTS_ARB    0x2054
 
 #ifdef _WIN64
 typedef int64_t khronos_ssize_t;
@@ -53,9 +148,7 @@ void   (__stdcall *glGetProgramiv)(GLuint program, GLenum pname,GLint* params) =
 void   (__stdcall *glGetProgramInfoLog)(GLuint program, GLsizei maxLength, GLsizei* length, GLchar* infoLog) = NULL;
 void   (__stdcall *glDeleteShader)(GLuint shader) = NULL;
 void   (__stdcall *glUseProgram)(GLuint program) = NULL;
-void   (__stdcall *glGenVertexArrays)(GLsizei n, GLuint* arrays) = NULL; 
 void   (__stdcall *glGenBuffers)(GLsizei n, GLuint* buffers) = NULL;
-void   (__stdcall *glBindVertexArray)(GLuint array) = NULL; 
 void   (__stdcall *glBindBuffer)(GLenum target, GLuint buffer) = NULL;
 void   (__stdcall *glBufferData)(GLenum target, GLsizeiptr size, const void* data, GLenum usage) = NULL;
 void   (__stdcall *glVertexAttribPointer)(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer) = NULL;
@@ -65,6 +158,17 @@ void   (__stdcall *glUniformMatrix4fv)(GLint location, GLsizei count, GLboolean 
 void   (__stdcall *glUniformMatrix3fv)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value) = NULL;
 void   (__stdcall *glUniform3fv)( GLint location, GLsizei count, const GLfloat *value) = NULL;
 void   (__stdcall *glUniform4fv)( GLint location, GLsizei count, const GLfloat *value) = NULL;
+void   (__stdcall *glUniform1i)( GLint location, GLint v0) = NULL;
+void   (__stdcall *glActiveTexture)(GLenum texture) = NULL;
+void   (__stdcall *glStencilMaskSeparate)(GLenum face,GLuint mask) = NULL;
+void   (__stdcall *glGenVertexArrays)(GLsizei n, GLuint* arrays) = NULL;
+void   (__stdcall *glBindVertexArray)(GLuint array) = NULL;  
+void   (__stdcall *glGenFramebuffers)(GLsizei n, GLuint *ids) = NULL;
+void   (__stdcall *glBindFramebuffer)(GLenum target, GLuint framebuffer) = NULL;
+void   (__stdcall *glFramebufferTexture2D)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level) = NULL;
+GLenum (__stdcall *glCheckFramebufferStatus)(GLenum target) = NULL;
+void   (__stdcall *glDrawBuffers)(GLsizei n,const GLenum *bufs) = NULL;
+void   (__stdcall *glBlitFramebuffer)(	GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter) = NULL;
 
 typedef struct Mat3f
 {
@@ -800,6 +904,78 @@ int CreateOpenGLWindow( HINSTANCE Instance )
         return -1;
     }
     wglMakeCurrent(hDC, ourOpenGLRC); // Make our render context current
+
+    //switch to ARB context if available to allow RenderDoc to work
+#if MAIN_DEBUG
+    int contextFlags = WGL_CONTEXT_DEBUG_BIT_ARB;
+#else
+    int contextFlags = 0;
+#endif
+
+    // Alright, now for the modernity. First try a 4.4, then 4.3, context, if that fails try 3.3.
+    // I can't seem to find a way that lets you simply request the newest version available.
+    const int attribs44[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+        WGL_CONTEXT_MINOR_VERSION_ARB, 4,
+        WGL_CONTEXT_FLAGS_ARB, contextFlags,
+        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+        0
+    };
+    const int attribs43[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+        WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+        WGL_CONTEXT_FLAGS_ARB, contextFlags,
+        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+        0
+    };
+    const int attribs33[] = {
+        WGL_CONTEXT_MAJOR_VERSION_ARB, 3,
+        WGL_CONTEXT_MINOR_VERSION_ARB, 3,
+        WGL_CONTEXT_FLAGS_ARB, contextFlags,
+        WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB,
+        0
+    };
+
+	const char *(__stdcall *wglGetExtensionsString)(void)       = (const char *(__stdcall *)(void))((void*)wglGetProcAddress ( "wglGetExtensionsString" ));
+	const char *(__stdcall *wglGetExtensionsStringEXT)(void)    = (const char *(__stdcall *)(void))((void*)wglGetProcAddress ( "wglGetExtensionsStringEXT" ));
+	const char *(__stdcall *wglGetExtensionsStringARB)(HDC hdc) = (const char *(__stdcall *)(HDC hdc))((void*)wglGetProcAddress ( "wglGetExtensionsStringARB" ));;
+	HGLRC (__stdcall *wglCreateContextAttribsARB) (HDC hDC, HGLRC hShareContext, const int *attribList) = (HGLRC (__stdcall *)(HDC hDC, HGLRC hShareContext, const int *attribList))((void*)wglGetProcAddress ( "wglCreateContextAttribsARB" ));
+
+	if( (wglGetExtensionsStringARB || wglGetExtensionsStringEXT) && wglCreateContextAttribsARB )
+	{
+		HGLRC ourDebugOpenGLRC;
+		if( (wglGetExtensionsStringARB && strstr ( wglGetExtensionsStringARB(hDC), "WGL_ARB_create_context" ) != nullptr)
+			|| (wglGetExtensionsStringEXT && strstr ( wglGetExtensionsStringEXT(), "WGL_ARB_create_context" ) != nullptr) )
+		{
+    		ourDebugOpenGLRC = wglCreateContextAttribsARB(hDC, 0, attribs44);
+    		if (!ourDebugOpenGLRC)
+    		{
+    		    ourDebugOpenGLRC = wglCreateContextAttribsARB(hDC, 0, attribs43);
+    		}
+    		if (!ourDebugOpenGLRC)
+    		{
+    		    ourDebugOpenGLRC = wglCreateContextAttribsARB(hDC, 0, attribs33);
+    		}
+
+    		if (!ourDebugOpenGLRC) 
+    		{
+    		    // Fall back
+    		    ourDebugOpenGLRC = ourOpenGLRC;
+    		} 
+    		else 
+    		{
+    		    // Switch to the new ARB context.
+    		    wglMakeCurrent(NULL, NULL);
+    		    wglDeleteContext(ourOpenGLRC);
+    		    wglMakeCurrent(hDC, ourDebugOpenGLRC);
+    		}
+		}
+		else
+		{
+			ourDebugOpenGLRC = ourOpenGLRC;
+		}
+	}
+
     return 0;
 }
 
@@ -820,6 +996,12 @@ inline void loadGLFuncPtrs()
             //opengl version 3.0 required
             glGenVertexArrays = (void(__stdcall*)(GLsizei n, GLuint * arrays))((void*)wglGetProcAddress("glGenVertexArrays"));
             glBindVertexArray = (void(__stdcall*)(GLuint array))((void*)wglGetProcAddress("glBindVertexArray"));
+            glGenFramebuffers = (void(__stdcall*)(GLsizei n, GLuint *ids))((void*)wglGetProcAddress("glGenFramebuffers"));
+            glBindFramebuffer = (void(__stdcall*)(GLenum target, GLuint framebuffer))((void*)wglGetProcAddress("glBindFramebuffer"));
+            glFramebufferTexture2D = (void(__stdcall*)(GLenum target, GLenum attachment, GLenum textarget, GLuint texture, GLint level))((void*)wglGetProcAddress("glFramebufferTexture2D"));
+            glCheckFramebufferStatus = (GLenum (__stdcall *)(GLenum target))((void*)wglGetProcAddress("glCheckFramebufferStatus"));
+            glDrawBuffers = (void(__stdcall *)(GLsizei n,const GLenum *bufs))((void*)wglGetProcAddress("glDrawBuffers"));
+            glBlitFramebuffer = (void(__stdcall *)(	GLint srcX0, GLint srcY0, GLint srcX1, GLint srcY1, GLint dstX0, GLint dstY0, GLint dstX1, GLint dstY1, GLbitfield mask, GLenum filter))((void*)wglGetProcAddress("glBlitFramebuffer"));
         }
         case 2:
         {
@@ -846,6 +1028,9 @@ inline void loadGLFuncPtrs()
             glUniformMatrix3fv = (void(__stdcall *)(GLint location, GLsizei count, GLboolean transpose, const GLfloat *value))((void*)wglGetProcAddress("glUniformMatrix3fv"));
         	glUniform3fv = (void(__stdcall *)( GLint location, GLsizei count, const GLfloat *value))((void*)wglGetProcAddress("glUniform3fv"));
         	glUniform4fv = (void(__stdcall *)( GLint location, GLsizei count, const GLfloat *value))((void*)wglGetProcAddress("glUniform4fv"));
+        	glUniform1i = (void(__stdcall *)( GLint location, GLint v0))((void*)wglGetProcAddress("glUniform1i"));
+        	glActiveTexture = (void(__stdcall *)(GLenum texture))((void*)wglGetProcAddress("glActiveTexture"));
+        	glStencilMaskSeparate = (void(__stdcall *)(GLenum face,GLuint mask))((void*)wglGetProcAddress("glStencilMaskSeparate"));
         } break;
         case 1:
             printf("Compiled Shaders NOT SUPPORTED!\n");
