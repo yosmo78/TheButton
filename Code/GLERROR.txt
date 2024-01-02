@@ -1,0 +1,4 @@
+ERROR SHADER_COMPILATION_ERROR of type: Fragment Shader
+ERROR: 0:2: '}' : syntax error syntax error
+
+

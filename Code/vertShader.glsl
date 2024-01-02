@@ -8,11 +8,15 @@ uniform mat4 mModel;
 uniform mat3 mNormal;
 uniform mat4 mViewProj;
 
+varying vec3 worldPos;
 varying vec3 vNormal;
 
 void main()
 {
-   gl_Position =  (mViewProj *mModel) * vec4(aPos,1.0) ;
-   vNormal =  mNormal*aNormal;
+
+   gl_Position =  (mViewProj * mModel) * vec4(aPos,1.0);
+   worldPos = (mModel * vec4(aPos,1.0)).xyz;
+   // vNormal =  mNormal*aNormal;
+   vNormal =  aNormal;
 }
 )

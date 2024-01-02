@@ -163,12 +163,13 @@ uint8_t isFullscreen;
 Vec3f position;
 float rotHor;
 float rotVert;
+float dist;
 const float hFov = 60.0f;
 const float vFov = 60.0f;
 
 //movement
 float speed = 10.0f; //movement speed
-float mouseSensitivity = 5.f;
+float mouseSensitivity = 20.f;
 
 //Window handles
 HDC hDC;
@@ -563,6 +564,16 @@ void InitViewMat4ByQuatf( Mat4f *a_pMat, float horizontalAngle, float verticalAn
 	a_pMat->m[2][0] = 2.0f*(qRot.x*qRot.z - qRot.w*qRot.y);                                               a_pMat->m[2][1] = 2.0f*(qRot.y*qRot.z + qRot.w*qRot.x);                                               a_pMat->m[2][2] = 1.0f - 2.0f*(qRot.x*qRot.x + qRot.y*qRot.y); 		                                  a_pMat->m[2][3] = 0;
 	a_pMat->m[3][0] = -a_pPos->x*a_pMat->m[0][0] - a_pPos->y*a_pMat->m[1][0] - a_pPos->z*a_pMat->m[2][0]; a_pMat->m[3][1] = -a_pPos->x*a_pMat->m[0][1] - a_pPos->y*a_pMat->m[1][1] - a_pPos->z*a_pMat->m[2][1]; a_pMat->m[3][2] = -a_pPos->x*a_pMat->m[0][2] - a_pPos->y*a_pMat->m[1][2] - a_pPos->z*a_pMat->m[2][2]; a_pMat->m[3][3] = 1;
 }
+
+
+inline
+void Mat4fMultVec3f( Mat4f *__restrict a, Vec3f *__restrict v, Vec3f *__restrict out)
+{
+    out->x = v->x*a->m[0][0] + v->y*a->m[1][0] + v->z*a->m[2][0] + a->m[3][0];
+    out->y = v->x*a->m[0][1] + v->y*a->m[1][1] + v->z*a->m[2][1] + a->m[3][1];
+    out->z = v->x*a->m[0][2] + v->y*a->m[1][2] + v->z*a->m[2][2] + a->m[3][2];
+}
+
 
 void PrintMat4f( Mat4f *a_pMat )
 {
@@ -1047,7 +1058,9 @@ int APIENTRY WinMain(
     
     ShowCursor( FALSE );
 
-    position = { 0.0f,0.0f,0.0f };
+	
+	dist = 15.0f;
+    position = { dist, 0.0f, dist };
     rotHor = 0.0f;
     rotVert = 0.0f;
 
@@ -1063,6 +1076,9 @@ int APIENTRY WinMain(
     GLuint fragShaderID = LoadShaderFromString(fragmentShader,GL_FRAGMENT_SHADER,"Fragment Shader");
     GLuint shaderProgramID = compileShaderProgram(vertShaderID,fragShaderID);
 
+    GLint lightPosUniformLoc = glGetUniformLocation(shaderProgramID, "lightPos");
+    GLint camPosUniformLoc = glGetUniformLocation(shaderProgramID, "camPos");
+	
     GLint modelUniformLoc = glGetUniformLocation(shaderProgramID, "mModel");
 	GLint normalUniformLoc = glGetUniformLocation(shaderProgramID, "mNormal");
     GLint projViewUniformLoc = glGetUniformLocation(shaderProgramID, "mViewProj");
@@ -1221,49 +1237,68 @@ int APIENTRY WinMain(
 
         if(!isPaused)
         {
-        	Vec2f forwardOrientation = { sinf(rotHor*PI_F/180.0f), cosf(rotHor*PI_F/180.0f) };
-        	Vec2f rightOrientation = { sinf((rotHor-90)*PI_F/180.0f), cosf((rotHor-90)*PI_F/180.0f) };
-            Vec3f positionChange = {0.0f,0.0f,0.0f};
-        	if(movingForward)
-        	{
-        		positionChange.x += forwardOrientation.x;
-              	positionChange.z -= forwardOrientation.y;
-        	}
-        	if(movingLeft)
-        	{
-        		positionChange.x += rightOrientation.x;
-              	positionChange.z -= rightOrientation.y;
-        	}
-        	if(movingRight)
-        	{
-              	positionChange.x -= rightOrientation.x;
-              	positionChange.z += rightOrientation.y;
-        	}
-        	if(movingBackwards)
-        	{
-        		positionChange.x -= forwardOrientation.x;
-              	positionChange.z += forwardOrientation.y;
-        	}
-        	if(movingUp)
-        	{
-        		positionChange.y += 1;
-        	}
-        	if(movingDown)
-        	{
-        		positionChange.y -= 1;
-        	}
+			// Vec2f forwardOrientation = { sinf(rotHor*PI_F/180.0f), cosf(rotHor*PI_F/180.0f) };
+			// Vec2f rightOrientation = { sinf((rotHor-90)*PI_F/180.0f), cosf((rotHor-90)*PI_F/180.0f) };
+			// Vec3f positionChange = {0.0f,0.0f,0.0f};
+			// if(movingForward)
+			// {
+			// 	positionChange.x += forwardOrientation.x;
+			// 	positionChange.z -= forwardOrientation.y;
+			// }
+			// if(movingLeft)
+			// {
+			// 	positionChange.x += rightOrientation.x;
+			// 	positionChange.z -= rightOrientation.y;
+			// }
+			// if(movingRight)
+			// {
+			// 	positionChange.x -= rightOrientation.x;
+			// 	positionChange.z += rightOrientation.y;
+			// }
+			// if(movingBackwards)
+			// {
+			// 	positionChange.x -= forwardOrientation.x;
+			// 	positionChange.z += forwardOrientation.y;
+			// }
+			// if(movingUp)
+			// {
+			// 	positionChange.y += 1;
+			// }
+			// if(movingDown)
+			// {
+			// 	positionChange.y -= 1;
+			// }
 
-        	Vec3f oldPos;
-            oldPos.x = position.x;
-            oldPos.y = position.y;
-            oldPos.z = position.z;
-            Vec3f val;
-            //normalize positionChange maybe?
-            Vec3fScale(&positionChange,speed*deltaTime,&val);
-        	Vec3fAdd( &oldPos, &val, &position );
+			// Vec3f oldPos;
+			// oldPos.x = position.x;
+			// oldPos.y = position.y;
+			// oldPos.z = position.z;
+			// Vec3f val;
+			// //normalize positionChange maybe?
+			// Vec3fScale(&positionChange,speed*deltaTime,&val);
+			// Vec3fAdd( &oldPos, &val, &position );
+
             rotHor  = fmodf(rotHor  + deltaTime*mouseSensitivity*frameRot.x, 360.0f );
-            rotVert = clamp(rotVert + deltaTime*mouseSensitivity*frameRot.y, -90.0f, 90.0f);
+            rotVert = fmodf(rotVert + deltaTime*mouseSensitivity*frameRot.y, 360.0f );
+
+			Vec3f horPot = { (float)sin(rotHor*PI_F/180)*dist, 0, -(float)cos(rotHor*PI_F/180)*dist };
+			Vec3f arbitAxis = { (float)cos(rotHor*PI_F/180), 0, (float)sin(rotHor*PI_F/180) };
+
+			Mat4f rotMat;
+
+			InitRotArbAxisMat4f(&rotMat, &arbitAxis, rotVert);
+
+			Mat4fMultVec3f(&rotMat, &horPot, &position);
+
+			printf("rotHor, rotVert: %f, %f \n", rotHor, rotVert);
+			printf("xyz: %f, %f, %f \n", position.x, position.y, position.z);
+
+			//position = {0, 0, -15.f};
         }
+
+		InitTransMat4f( &mModelMatrices[4], -5, 0, 0 );
+		InitTransMat4f( &mModelMatrices[3], -5, 0, 0 );
+
 
 	    glEnable(GL_DEPTH_TEST);
 	    glEnable(GL_CULL_FACE); 
@@ -1271,8 +1306,15 @@ int APIENTRY WinMain(
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(shaderProgramID);
 
+
+		Vec3f lightPos = {-2.5, 5, 0};
+
+		glUniform3fv(lightPosUniformLoc, 1, (const GLfloat *)lightPos.v);\
+
+		glUniform3fv(camPosUniformLoc, 1, (const GLfloat *)position.v);
+
         Mat4f viewMatrix;
-        InitViewMat4ByQuatf( &viewMatrix, rotHor, rotVert, &position );
+        InitViewMat4ByQuatf( &viewMatrix, rotHor + 180, rotVert, &position );
 
         Mat4f projectMatrix;
         InitPerspectiveProjectionMat4f(&projectMatrix, screen_width, screen_height, hFov, vFov, 0.04f, 8000.0f );
