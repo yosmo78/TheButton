@@ -49,12 +49,21 @@ struct Vertex
 {
     Point3 pos;
     Point3 normal;
+    Point2 uv;
     bool operator==( const Vertex & v) const
     {
         return pos.x == v.pos.x && pos.y == v.pos.y && pos.z == v.pos.z && 
-            normal.x == v.normal.x && normal.y == v.normal.y && normal.z == v.normal.z;
+            normal.x == v.normal.x && normal.y == v.normal.y && normal.z == v.normal.z && 
+            uv.x == v.uv.x && uv.y == v.uv.y;
     }
 };
+
+struct Mesh
+{
+    std::vector<Vertex> mesh;
+    std::vector<int> meshIndices;
+};
+
 
 void printMaterials(const std::vector<Material> &materials)
 {
@@ -73,6 +82,14 @@ void printMaterials(const std::vector<Material> &materials)
 }
 
 namespace std {
+    template <>
+        class hash<Point2>{
+        public :
+            size_t operator()(const Point2 &p ) const
+            {
+                return hash<double>()(p.x) ^ hash<double>()(p.y);
+            }
+    };
     template <>
         class hash<Point3>{
         public :
@@ -94,7 +111,7 @@ namespace std {
         public :
             size_t operator()(const Vertex &v ) const
             {
-                return hash<Point3>()(v.pos) ^ hash<Point3>()(v.normal);
+                return hash<Point3>()(v.pos) ^ hash<Point3>()(v.normal) ^ hash<Point2>()(v.uv);
             }
     };
 };
@@ -132,253 +149,315 @@ int main()
         std::string indexArrayName = fileNamesNoExt[file]+"Indices";
         std::ifstream fin(fileNames[file]);
 
-        std::vector<Point3> verts;
-        std::vector<Point3> normals;
-        std::vector<Point2> texcoords;
+
         std::vector<Material> materials;
 
-        std::vector<Vertex> mesh;
-        std::vector<int> meshIndices;
-        std::unordered_map<Vertex,int> vertexMapper;
 
-        int currentMaterialIndex = -1;
+        std::vector<Mesh> meshes;
 
-        std::string line;
-        while(std::getline(fin,line))
         {
-            int div = line.find(" ");
-            std::string firstWord = line.substr(0, div);
-            std::stringstream ss(line.substr(div));
-            if( firstWord=="mtllib" )
+            std::vector<Point3> verts;
+            std::vector<Point3> normals;
+            std::vector<Point2> texcoords;
+    
+            std::vector<Vertex> mesh;
+            std::vector<int> meshIndices;
+            std::unordered_map<Vertex,int> vertexMapper;
+    
+            int currentMaterialIndex = -1;
+    
+            std::string line;
+            while(std::getline(fin,line))
             {
-                std::string fileName;
-                ss >> fileName;
-                std::ifstream matFin(fileNamesPath[file]+fileName);
-                std::string matLine;
-                while(std::getline(matFin,matLine))
+                size_t div = line.find(" ");
+                std::string firstWord = line.substr(0, div);
+                std::stringstream ss(line.substr(div));
+                if( firstWord=="mtllib" )
                 {
-                    int matDiv = matLine.find(" ");
-                    if( matDiv  < matLine.size() )
+                    std::string fileName;
+                    ss >> fileName;
+                    std::ifstream matFin(fileNamesPath[file]+fileName);
+                    std::string matLine;
+                    while(std::getline(matFin,matLine))
                     {
-                        std::string matFirstWord = matLine.substr(0, matDiv);
-                        std::stringstream matSS(matLine.substr(matDiv));
-                        if(matFirstWord=="newmtl" )
+                        size_t matDiv = matLine.find(" ");
+                        if( matDiv  < matLine.size() )
                         {
-                            Material mat;
-                            matSS >> mat.name;
-                            materials.push_back(mat);
-                        }
-                        else if(matFirstWord=="Ns" )
-                        {
-                            matSS >> materials.back().specularHighlight;
-                        }
-                        else if(matFirstWord=="Ka" )
-                        {
-                            matSS >> materials.back().ambient.x;
-                            matSS >> materials.back().ambient.y;
-                            matSS >> materials.back().ambient.z;
-                        }
-                        else if(matFirstWord=="Kd" )
-                        {
-                            matSS >> materials.back().diffuse.x;
-                            matSS >> materials.back().diffuse.y;
-                            matSS >> materials.back().diffuse.z;
-                        }
-                        else if(matFirstWord=="Ks" )
-                        {
-                            matSS >> materials.back().specular.x;
-                            matSS >> materials.back().specular.y;
-                            matSS >> materials.back().specular.z;
-                        }
-                        else if(matFirstWord=="Ke" )
-                        {
-                            matSS >> materials.back().emissive.x;
-                            matSS >> materials.back().emissive.y;
-                            matSS >> materials.back().emissive.z;
-                        }
-                        else if(matFirstWord=="Ni" )
-                        {
-                            matSS >> materials.back().indexOfRefraction;                     
-                        }
-                        else if(matFirstWord=="d" )
-                        {
-                            matSS >> materials.back().opacity;   
-                        }
-                        else if(matFirstWord=="illum" )
-                        {
-
-                        }
-                        else if(matFirstWord=="map_Kd" )
-                        {
-                            matSS >> materials.back().diffuseTexture; 
+                            std::string matFirstWord = matLine.substr(0, matDiv);
+                            std::stringstream matSS(matLine.substr(matDiv));
+                            if(matFirstWord=="newmtl" )
+                            {
+                                Material mat;
+                                matSS >> mat.name;
+                                materials.push_back(mat);
+                            }
+                            else if(matFirstWord=="Ns" )
+                            {
+                                matSS >> materials.back().specularHighlight;
+                            }
+                            else if(matFirstWord=="Ka" )
+                            {
+                                matSS >> materials.back().ambient.x;
+                                matSS >> materials.back().ambient.y;
+                                matSS >> materials.back().ambient.z;
+                            }
+                            else if(matFirstWord=="Kd" )
+                            {
+                                matSS >> materials.back().diffuse.x;
+                                matSS >> materials.back().diffuse.y;
+                                matSS >> materials.back().diffuse.z;
+                            }
+                            else if(matFirstWord=="Ks" )
+                            {
+                                matSS >> materials.back().specular.x;
+                                matSS >> materials.back().specular.y;
+                                matSS >> materials.back().specular.z;
+                            }
+                            else if(matFirstWord=="Ke" )
+                            {
+                                matSS >> materials.back().emissive.x;
+                                matSS >> materials.back().emissive.y;
+                                matSS >> materials.back().emissive.z;
+                            }
+                            else if(matFirstWord=="Ni" )
+                            {
+                                matSS >> materials.back().indexOfRefraction;                     
+                            }
+                            else if(matFirstWord=="d" )
+                            {
+                                matSS >> materials.back().opacity;   
+                            }
+                            else if(matFirstWord=="illum" )
+                            {
+    
+                            }
+                            else if(matFirstWord=="map_Kd" )
+                            {
+                                matSS >> materials.back().diffuseTexture; 
+                            }
                         }
                     }
+                    matFin.close();
                 }
-                matFin.close();
-            }
-            else if(firstWord=="v" )
-            {
-                Point3 p;
-                ss >> p.x;
-                ss >> p.y;
-                ss >> p.z;
-                verts.push_back(p);
-            }
-            else if(firstWord=="vn" )
-            {
-                Point3 p;
-                ss >> p.x;
-                ss >> p.y;
-                ss >> p.z;
-                normals.push_back(p);
-            }
-            else if(firstWord=="vt" )
-            {
-                Point2 p;
-                ss >> p.x;
-                ss >> p.y;
-                texcoords.push_back(p);
-            }
-            else if(firstWord=="f" )
-            {
-                std::vector<std::string> faceVerts;
-                std::string indexGrouped;
-                while( ss >> indexGrouped )
+                else if(firstWord=="v" )
                 {
-                    faceVerts.push_back( indexGrouped );
+                    Point3 p;
+                    ss >> p.x;
+                    ss >> p.y;
+                    ss >> p.z;
+                    verts.push_back(p);
                 }
-                for( int face = 0; face < faceVerts.size(); ++face )
+                else if(firstWord=="vn" )
                 {
-                    std::stringstream faceVertCutter(faceVerts[face]);
-                    std::string indexStr;
-                    int indexindex = 0;
-
-                    Vertex v;
-                    while( std::getline( faceVertCutter,indexStr,'/'))
+                    Point3 p;
+                    ss >> p.x;
+                    ss >> p.y;
+                    ss >> p.z;
+                    normals.push_back(p);
+                }
+                else if(firstWord=="vt" )
+                {
+                    Point2 p;
+                    ss >> p.x;
+                    ss >> p.y;
+                    texcoords.push_back(p);
+                }
+                else if(firstWord=="f" )
+                {
+                    std::vector<std::string> faceVerts;
+                    std::string indexGrouped;
+                    while( ss >> indexGrouped )
                     {
-                        if( indexStr.size() > 0)
+                        faceVerts.push_back( indexGrouped );
+                    }
+                    std::vector<Vertex> poly;
+                    for( int face = 0; face < faceVerts.size(); ++face )
+                    {
+                        std::stringstream faceVertCutter(faceVerts[face]);
+                        std::string indexStr;
+                        int indexindex = 0;
+    
+                        Vertex v;
+                        while( std::getline( faceVertCutter,indexStr,'/'))
                         {
-                            int index = std::stoi( indexStr );
-                            if( index < 0 )
+                            if( indexStr.size() > 0)
+                            {
+                                size_t index = std::stoi( indexStr );
+                                if( index < 0 )
+                                {
+                                    switch( indexindex )
+                                    {
+                                        case 0:
+                                        {
+                                            index = verts.size() + index;
+                                            break;
+                                        }
+                                        case 1:
+                                        {
+                                            index = texcoords.size() + index;
+                                            break;
+                                        }
+                                        case 2:
+                                        {
+                                            index = normals.size() + index;
+                                            break;
+                                        }
+                                    }
+    
+    
+                                }
+                                else
+                                {
+                                    index = index -1;
+                                }
+                                switch( indexindex )
+                                {
+                                    case 0:
+                                    {
+                                        v.pos = verts[index];
+                                        break;
+                                    }
+                                    case 1:
+                                    {
+                                        v.uv = texcoords[index];
+                                        break;
+                                    }
+                                    case 2:
+                                    {
+                                        v.normal = normals[index];
+                                        break;
+                                    }
+                                    default:
+                                    {
+                                        break;
+                                    }
+                                }
+                            }
+                            else
                             {
                                 switch( indexindex )
                                 {
                                     case 0:
                                     {
-                                        index = verts.size() + index;
+                                        v.pos = {0.0,0.0,0.0};
                                         break;
                                     }
                                     case 1:
                                     {
+                                        v.uv = {0.0,0.0};
                                         break;
                                     }
                                     case 2:
                                     {
-                                        index = normals.size() + index;
+                                        v.normal = {0.0,1.0,0.0};
+                                        break;
+                                    }
+                                    default:
+                                    {
                                         break;
                                     }
                                 }
-
-
                             }
-                            else
-                            {
-                                index = index -1;
-                            }
-                            switch( indexindex )
-                            {
-                                case 0:
-                                {
-                                    v.pos = verts[index];
-                                    break;
-                                }
-                                case 1:
-                                {
-                                    break;
-                                }
-                                case 2:
-                                {
-                                    v.normal = normals[index];
-                                    break;
-                                }
-                                default:
-                                {
-                                    break;
-                                }
-                            }
+                            ++indexindex;
                         }
-                        ++indexindex;
+
+
+                        poly.push_back(v);
                     }
 
-                    if( vertexMapper.end() == vertexMapper.find( v ) )
+                    for( uint32_t vert = 0; vert < poly.size(); ++vert )
                     {
-                        mesh.push_back(v);
-                        meshIndices.push_back(mesh.size()-1);
-                        vertexMapper[v] = mesh.size()-1;
-                    }
-                    else
-                    {
-                        meshIndices.push_back(vertexMapper[v]);
+                        Vertex &v = poly[vert];
+                        if( vertexMapper.end() == vertexMapper.find( v ) )
+                        {
+                            mesh.push_back(v);
+                            meshIndices.push_back((int)mesh.size()-1);
+                            vertexMapper[v] = (int)mesh.size()-1;
+                        }
+                        else
+                        {
+                            meshIndices.push_back(vertexMapper[v]);
+                        }
                     }
                 }
-            }
-            else if(firstWord=="usemtl" )
-            {
-                std::string matName;
-                ss >> matName;
-                for( int mat = 0; mat < materials.size(); ++mat )
+                else if(firstWord=="usemtl" )
                 {
-                    if( matName == materials[mat].name )
+                    std::string matName;
+                    ss >> matName;
+                    for( int mat = 0; mat < materials.size(); ++mat )
                     {
-                        currentMaterialIndex = mat;
-                        break;
+                        if( matName == materials[mat].name )
+                        {
+                            currentMaterialIndex = mat;
+                            break;
+                        }
                     }
                 }
+                else if(firstWord=="s" )
+                {
+	       	       //http://learnwebgl.brown37.net/10_surface_properties/smooth_vertex_normals.html
+                }
+                else if(firstWord=="o" )
+                {
+                    //probably make new vertex pools here for each
+                    if( meshIndices.size() > 0 )
+                    {
+                        meshes.push_back(Mesh());
+    
+                        meshes.back().mesh = std::move(mesh);
+                        meshes.back().meshIndices = std::move(meshIndices);
+                    }
+                    meshIndices.clear();
+                    vertexMapper.clear();
+                }
             }
-            else if(firstWord=="s" )
+            fin.close();
+
+            if( meshIndices.size() > 0 )
             {
-	    	//http://learnwebgl.brown37.net/10_surface_properties/smooth_vertex_normals.html
-            }
-            else if(firstWord=="o" )
-            {
-                //probably make new vertex pools here for each
+                meshes.push_back(Mesh());
+                meshes.back().mesh = std::move(mesh);
+                meshes.back().meshIndices = std::move(meshIndices);
             }
         }
-        fin.close();
-
         //printMaterials(materials);
 
-        fout << "float "<<vertexArrayName<<"[] ="<<std::endl<< "{"<<std::endl;
-        for( int i = 0; i < mesh.size(); ++i)
+        for( uint32_t meshIdx  = 0; meshIdx < meshes.size(); ++meshIdx )
         {
-            fout << "\t"<< std::fixed << std::setprecision(6) << (mesh[i].pos.x < 0?"":" ")<<mesh[i].pos.x <<"f, " << (mesh[i].pos.y < 0?"":" ")<<mesh[i].pos.y <<"f, " << (mesh[i].pos.z < 0?"":" ")<<mesh[i].pos.z <<"f, ";
-            fout << (mesh[i].normal.x < 0?"":" ") <<mesh[i].normal.x <<"f, " << (mesh[i].normal.y < 0?"":" ") <<mesh[i].normal.y <<"f, " << (mesh[i].normal.z < 0?"":" ") <<mesh[i].normal.z <<"f, ";
-            fout << std::endl;
-        }
-        fout << "};"<<std::endl;
-
-        int maxIndex = -1;
-        for( int i = 0; i < meshIndices.size(); ++i)
-        {
-            if( meshIndices[i] > maxIndex)
+            std::vector<Vertex> &mesh = meshes[meshIdx].mesh;
+            std::vector<int> &meshIndices = meshes[meshIdx].meshIndices;
+            fout << "float "<<vertexArrayName<<meshIdx<<"[] ="<<std::endl<< "{"<<std::endl;
+            for( int i = 0; i < mesh.size(); ++i)
             {
-                maxIndex = meshIndices[i];
-            }
-        }
-        double maxAmtOfIndexDigits = ceil(log10(maxIndex));
-        if( meshIndices.size() > 2 )
-        {
-            fout << "uint32_t "<<indexArrayName<<"[] ="<<std::endl<< "{"<<std::endl;
-            for( int i = 0; i < meshIndices.size(); i += 3)
-            {
-                fout << "\t" << std::setw(maxAmtOfIndexDigits) << meshIndices[i] << ", "<< std::setw(maxAmtOfIndexDigits) <<meshIndices[i+2] << ", "<< std::setw(maxAmtOfIndexDigits) <<meshIndices[i+1]  <<(((i+2) <meshIndices.size()-1)?",":"") << std::endl;
+                fout << "\t"<< std::fixed << std::setprecision(6) << (mesh[i].pos.x < 0?"":" ")<<mesh[i].pos.x <<"f, " << (mesh[i].pos.y < 0?"":" ")<<mesh[i].pos.y <<"f, " << (mesh[i].pos.z < 0?"":" ")<<mesh[i].pos.z <<"f, ";
+                fout << (mesh[i].normal.x < 0?"":" ") <<mesh[i].normal.x <<"f, " << (mesh[i].normal.y < 0?"":" ") <<mesh[i].normal.y <<"f, " << (mesh[i].normal.z < 0?"":" ") <<mesh[i].normal.z <<"f, ";
+                fout << std::endl;
             }
             fout << "};"<<std::endl;
-            fout << "uint32_t "<<indexArrayName<<"Count = "<< meshIndices.size()<<";" <<std::endl;
-        }
-        else
-        {
-            fout << "uint32_t "<<indexArrayName<<"Count = "<< 0<<";"<<std::endl;
+    
+            int maxIndex = -1;
+            for( int i = 0; i < meshIndices.size(); ++i)
+            {
+                if( meshIndices[i] > maxIndex)
+                {
+                    maxIndex = meshIndices[i];
+                }
+            }
+            double maxAmtOfIndexDigits = ceil(log10(maxIndex));
+            if( meshIndices.size() > 2 )
+            {
+                fout << "uint32_t "<<indexArrayName<<meshIdx<<"[] ="<<std::endl<< "{"<<std::endl;
+                for( int i = 0; i < meshIndices.size(); i += 3)
+                {
+                    fout << "\t" << std::setw((int)maxAmtOfIndexDigits) << meshIndices[i] << ", "<< std::setw((int)maxAmtOfIndexDigits) <<meshIndices[i+2] << ", "<< std::setw((int)maxAmtOfIndexDigits) <<meshIndices[i+1]  <<(((i+2) <meshIndices.size()-1)?",":"") << std::endl;
+                }
+                fout << "};"<<std::endl;
+                fout << "uint32_t "<<indexArrayName<<meshIdx<<"Count = "<< meshIndices.size()<<";" <<std::endl;
+            }
+            else
+            {
+                fout << "uint32_t "<<indexArrayName<<meshIdx<<"Count = "<< 0<<";"<<std::endl;
+            }
         }
     }
     fout.close();
