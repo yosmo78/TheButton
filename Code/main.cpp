@@ -449,18 +449,30 @@ void InitPerspectiveProjectionMat4f( Mat4f *a_pMat, uint64_t width, uint64_t hei
 {
 	float thFOV = tanf(a_hFOV*PI_F/360);
 	float tvFOV = tanf(a_vFOV*PI_F/360);
-	float nMinF = (nearPlane-farPlane);
-	float xmax = nearPlane * thFOV;
-	float ymax = nearPlane * tvFOV;
-  	float ymin = -ymax;
-  	float xmin = -xmax;
-  	float w = xmax - xmin;
-  	float h = ymax - ymin;
+	double dNearPlane = (double)nearPlane;
+	double dFarPlane = (double)farPlane;
+	double nMinF = (dNearPlane-dFarPlane);
   	float aspect = height / (float)width;
-	a_pMat->m[0][0] = 2.0f*nearPlane*aspect/(w*thFOV); a_pMat->m[0][1] = 0;                        a_pMat->m[0][2] = 0;                               a_pMat->m[0][3] = 0;
-	a_pMat->m[1][0] = 0;                               a_pMat->m[1][1] = 2.0f*nearPlane/(h*tvFOV); a_pMat->m[1][2] = 0;                               a_pMat->m[1][3] = 0;
-	a_pMat->m[2][0] = 0;                               a_pMat->m[2][1] = 0;                        a_pMat->m[2][2] = (farPlane+nearPlane)/nMinF;      a_pMat->m[2][3] = -1.0f;
-	a_pMat->m[3][0] = 0;                               a_pMat->m[3][1] = 0;                        a_pMat->m[3][2] = 2.0f*(farPlane*nearPlane)/nMinF; a_pMat->m[3][3] = 0;
+	a_pMat->m[0][0] = aspect/(thFOV*thFOV); a_pMat->m[0][1] = 0;                  a_pMat->m[0][2] = 0;                               		   a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0;                    a_pMat->m[1][1] = 1.0f/(tvFOV*tvFOV); a_pMat->m[1][2] = 0;                               		   a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0;                    a_pMat->m[2][1] = 0;                  a_pMat->m[2][2] = (float)((dFarPlane+dNearPlane)/nMinF);     a_pMat->m[2][3] = -1.0f;
+	a_pMat->m[3][0] = 0;                    a_pMat->m[3][1] = 0;                  a_pMat->m[3][2] = (float)(2.0*(dFarPlane*dNearPlane)/nMinF); a_pMat->m[3][3] = 0;
+}
+
+inline
+void InitInvPerspectiveProjectionMat4f( Mat4f *a_pMat, uint64_t width, uint64_t height, float a_hFOV, float a_vFOV, float nearPlane, float farPlane )
+{
+	float thFOV = tanf(a_hFOV*PI_F/360);
+	float tvFOV = tanf(a_vFOV*PI_F/360);
+	double dNearPlane = (double)nearPlane;
+	double dFarPlane = (double)farPlane;
+	double nMinF = (dNearPlane-dFarPlane);
+	double fFarNearDoubled = (2.0*(dFarPlane*dNearPlane));
+  	float invAspect = (float)width/height;
+	a_pMat->m[0][0] = thFOV*thFOV*invAspect; 		   a_pMat->m[0][1] = 0;             a_pMat->m[0][2] = 0;     a_pMat->m[0][3] = 0;
+	a_pMat->m[1][0] = 0;                               a_pMat->m[1][1] = tvFOV * tvFOV; a_pMat->m[1][2] = 0;     a_pMat->m[1][3] = 0;
+	a_pMat->m[2][0] = 0;                               a_pMat->m[2][1] = 0;             a_pMat->m[2][2] = 0;     a_pMat->m[2][3] = (float)(nMinF/fFarNearDoubled);
+	a_pMat->m[3][0] = 0;                               a_pMat->m[3][1] = 0;             a_pMat->m[3][2] = -1.0f; a_pMat->m[3][3] = (float)((dFarPlane+dNearPlane)/fFarNearDoubled);
 }
 
 inline
@@ -486,6 +498,17 @@ void Mat4fMult( Mat4f *__restrict a, Mat4f *__restrict b, Mat4f *__restrict out)
 	out->m[3][2] = a->m[3][0]*b->m[0][2] + a->m[3][1]*b->m[1][2] + a->m[3][2]*b->m[2][2] + a->m[3][3]*b->m[3][2];
 	out->m[3][3] = a->m[3][0]*b->m[0][3] + a->m[3][1]*b->m[1][3] + a->m[3][2]*b->m[2][3] + a->m[3][3]*b->m[3][3];
 }
+
+
+inline
+void Mat4fMultVec3f( Mat4f *__restrict a, Vec3f *__restrict v, Vec3f *__restrict out)
+{
+	out->x = v->x*a->m[0][0] + v->y*a->m[1][0] + v->z*a->m[2][0] + a->m[3][0];
+	out->y = v->x*a->m[0][1] + v->y*a->m[1][1] + v->z*a->m[2][1] + a->m[3][1];
+	out->z = v->x*a->m[0][2] + v->y*a->m[1][2] + v->z*a->m[2][2] + a->m[3][2];
+}
+
+
 
 inline
 float DeterminantUpper3x3Mat4f( Mat4f *a_pMat )
@@ -653,14 +676,11 @@ void QuatfMult( Quatf *__restrict a, Quatf *__restrict b, Quatf *__restrict out 
 inline
 void InitViewMat4ByQuatf( Mat4f *a_pMat, float horizontalAngle, float verticalAngle, Vec3f *a_pPos )
 {
-	Quatf qHor, qVert;
-	Vec3f vertAxis = {cosf(horizontalAngle*PI_F/180.0f),0,sinf(horizontalAngle*PI_F/180.0f)};
-	Vec3f horAxis = {0,1,0};
-	InitUnitQuatf( &qVert, -verticalAngle, &vertAxis );
-	InitUnitQuatf( &qHor, -horizontalAngle, &horAxis );
-
 	Quatf qRot;
-	QuatfMult( &qVert, &qHor, &qRot);
+	qRot.w =  cosf(verticalAngle*PI_F/360.0f) * cosf(horizontalAngle*PI_F/360.0f);
+	qRot.x = -sinf(verticalAngle*PI_F/360.0f) * cosf(horizontalAngle*PI_F/360.0f);
+	qRot.y = -cosf(verticalAngle*PI_F/360.0f) * sinf(horizontalAngle*PI_F/360.0f);
+	qRot.z = -sinf(verticalAngle*PI_F/360.0f) * sinf(horizontalAngle*PI_F/360.0f);
 
 	a_pMat->m[0][0] = 1.0f - 2.0f*(qRot.y*qRot.y + qRot.z*qRot.z);                                        a_pMat->m[0][1] = 2.0f*(qRot.x*qRot.y - qRot.w*qRot.z);                                               a_pMat->m[0][2] = 2.0f*(qRot.x*qRot.z + qRot.w*qRot.y);        		                                  a_pMat->m[0][3] = 0;
 	a_pMat->m[1][0] = 2.0f*(qRot.x*qRot.y + qRot.w*qRot.z);                                               a_pMat->m[1][1] = 1.0f - 2.0f*(qRot.x*qRot.x + qRot.z*qRot.z);                                        a_pMat->m[1][2] = 2.0f*(qRot.y*qRot.z - qRot.w*qRot.x);        		                                  a_pMat->m[1][3] = 0;
